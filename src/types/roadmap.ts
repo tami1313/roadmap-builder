@@ -1,0 +1,93 @@
+export type TimelineSection = 'now' | 'next' | 'later';
+
+export type ProblemType = 'tooling' | 'user-facing';
+
+export type PreBuildMethod = 'user-testing' | 'internal-experimentation';
+
+export type Scope = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
+
+export interface PreBuildValidation {
+  methods: PreBuildMethod[]; // Can have both user-testing and internal-experimentation
+  userTestingNeeds?: string;
+  validationNotes?: string;
+}
+
+export interface PostBuildValidation {
+  validationNotes?: string;
+}
+
+export interface Validation {
+  preBuild?: PreBuildValidation;
+  postBuild?: PostBuildValidation;
+}
+
+export interface TimelineIteration {
+  section: TimelineSection;
+  version: 'good' | 'better' | 'best';
+  description: string;
+}
+
+export interface Problem {
+  id: string;
+  title: string;
+  description: string;
+  successCriteria: string; // What success looks like
+  type: ProblemType;
+  icon: string;
+  timeline: TimelineSection; // Just the bucket
+  validation: Validation;
+  // Internal roadmap fields (added later by dev lead):
+  scope?: Scope;
+  detailedTimeline?: {
+    sprints?: string[];
+    months?: string[];
+    duration?: string;
+  };
+  technicalRequirements?: string;
+  dependencies?: string[];
+  resources?: number;
+  notes?: string;
+}
+
+export interface Outcome {
+  id: string;
+  title: string;
+  description: string;
+  timeline: {
+    sections: TimelineSection[];
+    iterations?: TimelineIteration[];
+  };
+  isExpanded: boolean;
+  problems: Problem[];
+}
+
+export interface Roadmap {
+  metadata: {
+    title: string;
+    lastUpdated: string;
+    version: 'external' | 'internal';
+    branding: {
+      logo: string | null;
+      productLogos: string[];
+    };
+  };
+  timeline: {
+    now: {
+      label: string;
+      period: string;
+      quarters: string[];
+    };
+    next: {
+      label: string;
+      period: string;
+      quarters: string[];
+    };
+    later: {
+      label: string;
+      period: string;
+      quarters: string[];
+    };
+  };
+  outcomes: Outcome[];
+}
+
