@@ -1,6 +1,12 @@
 # Version Information
 
-## Current Version: 1.1.0
+## Current Version: 1.2.0
+
+This version includes horizontal roadmap view, priority field, enhanced validation, and comprehensive error handling.
+
+### Previous Versions
+
+## Version 1.1.0
 
 This version includes enhanced builder pages with nested views and collapsible problems.
 

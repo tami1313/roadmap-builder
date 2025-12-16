@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2025-01-XX
+
+### Major Updates
+
+#### Features
+- **Horizontal Calendar-Style Roadmap View**
+  - Changed from vertical stacked layout to horizontal 3-column grid
+  - NOW, NEXT, LATER displayed side-by-side like a calendar/Gantt chart
+  - More compact card design optimized for column layout
+  - Better visual organization matching original examples
+
+- **Priority Field**
+  - Added priority field to problems (Must Have vs Nice to Have)
+  - Visual indicators: 🔴 Must Have, 🟡 Nice to Have
+  - Required field in problems form
+
+- **Enhanced Validation System**
+  - Post-build validation now supports methods (User Validation, SME Evaluation)
+  - Method-specific notes fields for all validation types
+  - Pre-build: User Testing Notes, Internal Experimentation Notes
+  - Post-build: User Validation Notes, SME Evaluation Notes
+  - Notes fields appear conditionally when methods are selected
+
+- **Comprehensive Error Handling**
+  - Validation feedback when saving with missing required fields
+  - Clear error messages listing all missing fields
+  - Visual error indicators (red borders) on invalid fields
+  - Real-time error clearing as fields are completed
+  - Error messages for both Expected Outcomes and Problems forms
+
+#### Improvements
+- Removed Good/Better/Best iteration functionality from Expected Outcomes
+- Better form organization with method-specific validation fields
+- Improved user experience with immediate validation feedback
+
 ## [1.1.0] - 2025-01-XX
 
 ### Enhanced Builder Pages
