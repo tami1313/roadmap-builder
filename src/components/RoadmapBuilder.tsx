@@ -15,6 +15,7 @@ export default function RoadmapBuilder() {
   const [showInternalDetails, setShowInternalDetails] = useState(false);
   const [editingOutcomeId, setEditingOutcomeId] = useState<string | null>(null);
   const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
+  const [expandedOutcomeProblems, setExpandedOutcomeProblems] = useState<Set<string>>(new Set());
 
   // Form states for outcomes
   const [outcomeTitle, setOutcomeTitle] = useState('');
@@ -260,6 +261,18 @@ export default function RoadmapBuilder() {
     }));
   };
 
+  const toggleOutcomeProblemsExpanded = (outcomeId: string) => {
+    setExpandedOutcomeProblems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(outcomeId)) {
+        newSet.delete(outcomeId);
+      } else {
+        newSet.add(outcomeId);
+      }
+      return newSet;
+    });
+  };
+
   const handleTimelineChange = (section: TimelineSection, checked: boolean) => {
     if (checked) {
       setOutcomeTimeline(prev => [...prev, section]);
@@ -497,7 +510,19 @@ export default function RoadmapBuilder() {
                     placeholder="Describe what success looks like for this problem..."
                   />
                 </div>
-                {/* Type is internal-only, will be added later by dev lead */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Feature/Functionality *
+                  </label>
+                  <select
+                    value={problemType}
+                    onChange={(e) => setProblemType(e.target.value as 'tooling' | 'user-facing')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="tooling">🔧 Tooling/Infrastructure</option>
+                    <option value="user-facing">👥 User-Facing Feature</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Timeline Bucket *
@@ -813,8 +838,8 @@ export default function RoadmapBuilder() {
           </div>
         )}
 
-        {/* Outcomes List */}
-        {phase !== 'complete' && (
+        {/* Outcomes List - Only show on Phase 1 (Expected Outcomes) */}
+        {phase === 'outcomes' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4">
               Current Expected Outcomes ({roadmap.outcomes.length})
@@ -822,26 +847,67 @@ export default function RoadmapBuilder() {
             {roadmap.outcomes.length === 0 ? (
               <p className="text-gray-600">No expected outcomes added yet. Start by adding your first expected outcome above.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {roadmap.outcomes.map(outcome => (
-                  <div key={outcome.id} className="p-3 bg-gray-50 rounded border border-gray-200 hover:border-blue-300 transition-colors">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900">{outcome.title}</h4>
-                        <p className="text-sm text-gray-600 mt-1">{outcome.description}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Timeline: {outcome.timeline.sections.join(', ').toUpperCase()} | 
-                          Problems to Solve: {outcome.problems.length}
-                        </p>
+                  <div key={outcome.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Expected Outcome Header */}
+                    <div className="p-3 bg-gray-50 hover:bg-gray-100 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">{outcome.title}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{outcome.description}</p>
+                        </div>
+                        <div className="flex items-center gap-2 ml-3">
+                          <button
+                            onClick={() => handleEditOutcome(outcome.id)}
+                            className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                            title="Edit expected outcome"
+                          >
+                            Edit
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleEditOutcome(outcome.id)}
-                        className="ml-3 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                        title="Edit expected outcome"
-                      >
-                        Edit
-                      </button>
                     </div>
+                    {/* Nested Problems to Solve */}
+                    {outcome.problems.length > 0 && (
+                      <div className="border-t border-gray-200 bg-white">
+                        <button
+                          onClick={() => toggleOutcomeProblemsExpanded(outcome.id)}
+                          className="w-full px-3 py-2 bg-gray-50 border-b border-gray-200 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                        >
+                          <h5 className="text-sm font-medium text-gray-700">Problems to Solve ({outcome.problems.length})</h5>
+                          <span className="text-gray-600 text-sm">
+                            {expandedOutcomeProblems.has(outcome.id) ? '−' : '+'}
+                          </span>
+                        </button>
+                        {expandedOutcomeProblems.has(outcome.id) && (
+                          <div className="divide-y divide-gray-100">
+                            {outcome.problems.map(problem => (
+                              <div key={problem.id} className="p-3 hover:bg-gray-50 transition-colors">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <h6 className="font-medium text-gray-900 text-sm">{problem.title}</h6>
+                                    <p className="text-sm text-gray-600 mt-1">{problem.description}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                    className="ml-3 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                                    title="Edit problem to solve"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {outcome.problems.length === 0 && (
+                      <div className="px-3 py-2 bg-white border-t border-gray-200">
+                        <p className="text-xs text-gray-500 italic">No problems to solve added yet</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
