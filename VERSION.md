@@ -1,6 +1,12 @@
 # Version Information
 
-## Current Version: 1.0.0
+## Current Version: 1.1.0
+
+This version includes enhanced builder pages with nested views and collapsible problems.
+
+### Previous Versions
+
+## Version 1.0.0
 
 This is the initial stable release of the Roadmap Builder application.
 

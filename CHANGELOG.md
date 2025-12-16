@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-01-XX
+
+### Enhanced Builder Pages
+
+#### Features
+- **Nested Problems Display**
+  - Problems to solve now display nested under their expected outcomes on the builder page
+  - Shows only essential information (title and description) for both outcomes and problems
+  - Clear visual hierarchy with proper nesting
+
+- **Collapsible Problems Section**
+  - Added +/- toggle functionality to collapse/expand problems under each outcome
+  - Each outcome's problems can be expanded/collapsed independently
+  - Minus (−) indicates expanded, Plus (+) indicates collapsed
+
+- **Feature/Functionality Field**
+  - Restored Feature/Functionality field to problems form
+  - Can now edit type (Tooling/Infrastructure or User-Facing Feature) from builder and roadmap view
+  - Required field with proper validation
+
+#### Improvements
+- Better organization of expected outcomes list
+- Improved visual separation between outcomes and problems
+- Enhanced edit functionality across all views
+
 ## [1.0.0] - 2025-01-XX
 
 ### Initial Release - External Roadmap View
