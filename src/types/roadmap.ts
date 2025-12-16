@@ -3,17 +3,20 @@ export type TimelineSection = 'now' | 'next' | 'later';
 export type ProblemType = 'tooling' | 'user-facing';
 
 export type PreBuildMethod = 'user-testing' | 'internal-experimentation';
+export type PostBuildMethod = 'user-validation' | 'sme-evaluation';
 
 export type Scope = 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
 
 export interface PreBuildValidation {
   methods: PreBuildMethod[]; // Can have both user-testing and internal-experimentation
-  userTestingNeeds?: string;
-  validationNotes?: string;
+  userTestingNotes?: string;
+  internalExperimentationNotes?: string;
 }
 
 export interface PostBuildValidation {
-  validationNotes?: string;
+  methods: PostBuildMethod[]; // Can have both user-validation and sme-evaluation
+  userValidationNotes?: string;
+  smeEvaluationNotes?: string;
 }
 
 export interface Validation {
@@ -27,6 +30,8 @@ export interface TimelineIteration {
   description: string;
 }
 
+export type Priority = 'must-have' | 'nice-to-have';
+
 export interface Problem {
   id: string;
   title: string;
@@ -35,6 +40,7 @@ export interface Problem {
   type: ProblemType;
   icon: string;
   timeline: TimelineSection; // Just the bucket
+  priority: Priority;
   validation: Validation;
   // Internal roadmap fields (added later by dev lead):
   scope?: Scope;

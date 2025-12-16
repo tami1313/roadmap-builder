@@ -16,12 +16,13 @@ export default function RoadmapBuilder() {
   const [editingOutcomeId, setEditingOutcomeId] = useState<string | null>(null);
   const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
   const [expandedOutcomeProblems, setExpandedOutcomeProblems] = useState<Set<string>>(new Set());
+  const [outcomeErrors, setOutcomeErrors] = useState<string[]>([]);
+  const [problemErrors, setProblemErrors] = useState<string[]>([]);
 
   // Form states for outcomes
   const [outcomeTitle, setOutcomeTitle] = useState('');
   const [outcomeDescription, setOutcomeDescription] = useState('');
   const [outcomeTimeline, setOutcomeTimeline] = useState<TimelineSection[]>(['now']);
-  const [iterations, setIterations] = useState<Array<{section: TimelineSection; version: 'good' | 'better' | 'best'; description: string}>>([]);
 
   // Form states for problems
   const [problemTitle, setProblemTitle] = useState('');
@@ -29,13 +30,16 @@ export default function RoadmapBuilder() {
   const [successCriteria, setSuccessCriteria] = useState('');
   const [problemType, setProblemType] = useState<'tooling' | 'user-facing'>('user-facing');
   const [problemTimeline, setProblemTimeline] = useState<TimelineSection>('now');
+  const [problemPriority, setProblemPriority] = useState<'must-have' | 'nice-to-have'>('must-have');
   // Validation states - can have both pre-build and post-build
   const [hasPreBuildValidation, setHasPreBuildValidation] = useState(false);
   const [preBuildMethods, setPreBuildMethods] = useState<Array<'user-testing' | 'internal-experimentation'>>([]);
-  const [preBuildUserTestingNeeds, setPreBuildUserTestingNeeds] = useState('');
-  const [preBuildValidationNotes, setPreBuildValidationNotes] = useState('');
+  const [preBuildUserTestingNotes, setPreBuildUserTestingNotes] = useState('');
+  const [preBuildInternalExperimentationNotes, setPreBuildInternalExperimentationNotes] = useState('');
   const [hasPostBuildValidation, setHasPostBuildValidation] = useState(false);
-  const [postBuildValidationNotes, setPostBuildValidationNotes] = useState('');
+  const [postBuildMethods, setPostBuildMethods] = useState<Array<'user-validation' | 'sme-evaluation'>>([]);
+  const [postBuildUserValidationNotes, setPostBuildUserValidationNotes] = useState('');
+  const [postBuildSmeEvaluationNotes, setPostBuildSmeEvaluationNotes] = useState('');
 
   useEffect(() => {
     const loaded = loadRoadmap();
@@ -52,7 +56,25 @@ export default function RoadmapBuilder() {
   }, [roadmap]);
 
   const handleAddOutcome = () => {
-    if (!outcomeTitle.trim() || !outcomeDescription.trim()) return;
+    // Validate required fields
+    const errors: string[] = [];
+    if (!outcomeTitle.trim()) {
+      errors.push('Expected Outcome Title is required');
+    }
+    if (!outcomeDescription.trim()) {
+      errors.push('Expected Outcome Description is required');
+    }
+    if (outcomeTimeline.length === 0) {
+      errors.push('At least one Timeline Section must be selected');
+    }
+
+    if (errors.length > 0) {
+      setOutcomeErrors(errors);
+      return;
+    }
+
+    // Clear errors if validation passes
+    setOutcomeErrors([]);
 
     if (editingOutcomeId) {
       // Update existing outcome
@@ -65,8 +87,7 @@ export default function RoadmapBuilder() {
                 title: outcomeTitle,
                 description: outcomeDescription,
                 timeline: {
-                  sections: outcomeTimeline,
-                  iterations: iterations.length > 0 ? iterations : undefined
+                  sections: outcomeTimeline
                 }
               }
             : outcome
@@ -84,8 +105,7 @@ export default function RoadmapBuilder() {
         title: outcomeTitle,
         description: outcomeDescription,
         timeline: {
-          sections: outcomeTimeline,
-          iterations: iterations.length > 0 ? iterations : undefined
+          sections: outcomeTimeline
         },
         isExpanded: true,
         problems: []
@@ -105,7 +125,6 @@ export default function RoadmapBuilder() {
     setOutcomeTitle('');
     setOutcomeDescription('');
     setOutcomeTimeline(['now']);
-    setIterations([]);
   };
 
   const handleEditOutcome = (outcomeId: string) => {
@@ -116,26 +135,55 @@ export default function RoadmapBuilder() {
     setOutcomeTitle(outcome.title);
     setOutcomeDescription(outcome.description);
     setOutcomeTimeline(outcome.timeline.sections);
-    setIterations(outcome.timeline.iterations || []);
+    setOutcomeErrors([]);
     setPhase('outcomes');
   };
 
   const handleAddProblem = () => {
-    if (!currentOutcomeId || !problemTitle.trim() || !problemDescription.trim() || !successCriteria.trim()) return;
+    // Validate required fields
+    const errors: string[] = [];
+    if (!currentOutcomeId) {
+      errors.push('An Expected Outcome must be selected');
+    }
+    if (!problemTitle.trim()) {
+      errors.push('Problem Title is required');
+    }
+    if (!problemDescription.trim()) {
+      errors.push('Problem Description is required');
+    }
+    if (!successCriteria.trim()) {
+      errors.push('What Success Looks Like is required');
+    }
+    if (hasPreBuildValidation && preBuildMethods.length === 0) {
+      errors.push('At least one Pre-Build Validation method must be selected');
+    }
+    if (hasPostBuildValidation && postBuildMethods.length === 0) {
+      errors.push('At least one Post-Build Validation method must be selected');
+    }
+
+    if (errors.length > 0) {
+      setProblemErrors(errors);
+      return;
+    }
+
+    // Clear errors if validation passes
+    setProblemErrors([]);
 
     const validation: Validation = {};
     
     if (hasPreBuildValidation && preBuildMethods.length > 0) {
       validation.preBuild = {
         methods: preBuildMethods,
-        userTestingNeeds: preBuildUserTestingNeeds || undefined,
-        validationNotes: preBuildValidationNotes || undefined
+        userTestingNotes: preBuildUserTestingNotes || undefined,
+        internalExperimentationNotes: preBuildInternalExperimentationNotes || undefined
       };
     }
     
-    if (hasPostBuildValidation) {
+    if (hasPostBuildValidation && postBuildMethods.length > 0) {
       validation.postBuild = {
-        validationNotes: postBuildValidationNotes || undefined
+        methods: postBuildMethods,
+        userValidationNotes: postBuildUserValidationNotes || undefined,
+        smeEvaluationNotes: postBuildSmeEvaluationNotes || undefined
       };
     }
 
@@ -157,6 +205,7 @@ export default function RoadmapBuilder() {
                         type: problemType || 'user-facing',
                         icon: getIconForType(problemType || 'user-facing'),
                         timeline: problemTimeline,
+                        priority: problemPriority,
                         validation
                       }
                     : problem
@@ -180,6 +229,7 @@ export default function RoadmapBuilder() {
         type: problemType || 'user-facing', // Default to user-facing if not set (will be set by dev lead later)
         icon: getIconForType(problemType || 'user-facing'),
         timeline: problemTimeline,
+        priority: problemPriority,
         validation
       };
 
@@ -203,12 +253,16 @@ export default function RoadmapBuilder() {
     setSuccessCriteria('');
     setProblemType('user-facing');
     setProblemTimeline('now');
+    setProblemPriority('must-have');
     setHasPreBuildValidation(false);
     setPreBuildMethods([]);
-    setPreBuildUserTestingNeeds('');
-    setPreBuildValidationNotes('');
+    setPreBuildUserTestingNotes('');
+    setPreBuildInternalExperimentationNotes('');
     setHasPostBuildValidation(false);
-    setPostBuildValidationNotes('');
+    setPostBuildMethods([]);
+    setPostBuildUserValidationNotes('');
+    setPostBuildSmeEvaluationNotes('');
+    setProblemErrors([]);
   };
 
   const handleEditProblem = (outcomeId: string, problemId: string) => {
@@ -225,26 +279,31 @@ export default function RoadmapBuilder() {
     setSuccessCriteria(problem.successCriteria);
     setProblemType(problem.type);
     setProblemTimeline(problem.timeline);
+    setProblemPriority(problem.priority);
     
     // Set validation fields
     if (problem.validation.preBuild) {
       setHasPreBuildValidation(true);
       setPreBuildMethods(problem.validation.preBuild.methods || []);
-      setPreBuildUserTestingNeeds(problem.validation.preBuild.userTestingNeeds || '');
-      setPreBuildValidationNotes(problem.validation.preBuild.validationNotes || '');
+      setPreBuildUserTestingNotes(problem.validation.preBuild.userTestingNotes || '');
+      setPreBuildInternalExperimentationNotes(problem.validation.preBuild.internalExperimentationNotes || '');
     } else {
       setHasPreBuildValidation(false);
       setPreBuildMethods([]);
-      setPreBuildUserTestingNeeds('');
-      setPreBuildValidationNotes('');
+      setPreBuildUserTestingNotes('');
+      setPreBuildInternalExperimentationNotes('');
     }
     
     if (problem.validation.postBuild) {
       setHasPostBuildValidation(true);
-      setPostBuildValidationNotes(problem.validation.postBuild.validationNotes || '');
+      setPostBuildMethods(problem.validation.postBuild.methods || []);
+      setPostBuildUserValidationNotes(problem.validation.postBuild.userValidationNotes || '');
+      setPostBuildSmeEvaluationNotes(problem.validation.postBuild.smeEvaluationNotes || '');
     } else {
       setHasPostBuildValidation(false);
-      setPostBuildValidationNotes('');
+      setPostBuildMethods([]);
+      setPostBuildUserValidationNotes('');
+      setPostBuildSmeEvaluationNotes('');
     }
     
     setPhase('problems');
@@ -278,22 +337,6 @@ export default function RoadmapBuilder() {
       setOutcomeTimeline(prev => [...prev, section]);
     } else {
       setOutcomeTimeline(prev => prev.filter(s => s !== section));
-      setIterations(prev => prev.filter(i => i.section !== section));
-    }
-  };
-
-  const addIteration = () => {
-    const sections = outcomeTimeline.filter(s => 
-      !iterations.some(i => i.section === s)
-    );
-    if (sections.length > 0) {
-      const versions: Array<'good' | 'better' | 'best'> = ['good', 'better', 'best'];
-      const versionIndex = iterations.length;
-      setIterations(prev => [...prev, {
-        section: sections[0],
-        version: versions[versionIndex] || 'good',
-        description: ''
-      }]);
     }
   };
 
@@ -351,18 +394,35 @@ export default function RoadmapBuilder() {
             <h3 className="text-lg font-semibold mb-4">
               {editingOutcomeId ? 'Edit Expected Outcome' : 'Add New Expected Outcome'}
             </h3>
+            {outcomeErrors.length > 0 && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h4 className="text-sm font-semibold text-red-800 mb-2">Please complete the following required fields:</h4>
+                <ul className="list-disc list-inside space-y-1">
+                  {outcomeErrors.map((error, idx) => (
+                    <li key={idx} className="text-sm text-red-700">{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Expected Outcome Title *
                 </label>
-                <input
-                  type="text"
-                  value={outcomeTitle}
-                  onChange={(e) => setOutcomeTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., User Navigation & Orientation"
-                />
+                  <input
+                    type="text"
+                    value={outcomeTitle}
+                    onChange={(e) => {
+                      setOutcomeTitle(e.target.value);
+                      if (e.target.value.trim() && outcomeErrors.includes('Expected Outcome Title is required')) {
+                        setOutcomeErrors(outcomeErrors.filter(err => err !== 'Expected Outcome Title is required'));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      outcomeErrors.some(e => e.includes('Title')) ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                    placeholder="e.g., User Navigation & Orientation"
+                  />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -370,9 +430,16 @@ export default function RoadmapBuilder() {
                 </label>
                 <textarea
                   value={outcomeDescription}
-                  onChange={(e) => setOutcomeDescription(e.target.value)}
+                  onChange={(e) => {
+                    setOutcomeDescription(e.target.value);
+                    if (e.target.value.trim() && outcomeErrors.includes('Expected Outcome Description is required')) {
+                      setOutcomeErrors(outcomeErrors.filter(err => err !== 'Expected Outcome Description is required'));
+                    }
+                  }}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    outcomeErrors.some(e => e.includes('Description')) ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                  }`}
                   placeholder="Describe the high-level problem or outcome you're trying to achieve..."
                 />
               </div>
@@ -393,35 +460,6 @@ export default function RoadmapBuilder() {
                     </label>
                   ))}
                 </div>
-                {outcomeTimeline.length > 1 && (
-                  <div className="mt-4">
-                    <button
-                      onClick={addIteration}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      + Add Iteration (Good → Better → Best)
-                    </button>
-                    {iterations.map((iter, idx) => (
-                      <div key={idx} className="mt-2 p-3 bg-gray-50 rounded">
-                        <div className="flex gap-2 items-center mb-2">
-                          <span className="text-sm font-medium capitalize">{iter.section}</span>
-                          <span className="text-sm text-gray-600">({iter.version})</span>
-                        </div>
-                        <input
-                          type="text"
-                          value={iter.description}
-                          onChange={(e) => {
-                            const newIters = [...iterations];
-                            newIters[idx].description = e.target.value;
-                            setIterations(newIters);
-                          }}
-                          placeholder="Iteration description"
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -437,7 +475,6 @@ export default function RoadmapBuilder() {
                       setOutcomeTitle('');
                       setOutcomeDescription('');
                       setOutcomeTimeline(['now']);
-                      setIterations([]);
                     }}
                     className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                   >
@@ -455,6 +492,16 @@ export default function RoadmapBuilder() {
             <h3 className="text-lg font-semibold mb-4">
               {editingProblemId ? 'Edit Problem to Solve' : 'Add Problem to Solve'}
             </h3>
+            {problemErrors.length > 0 && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h4 className="text-sm font-semibold text-red-800 mb-2">Please complete the following required fields:</h4>
+                <ul className="list-disc list-inside space-y-1">
+                  {problemErrors.map((error, idx) => (
+                    <li key={idx} className="text-sm text-red-700">{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Select Expected Outcome *
@@ -481,8 +528,15 @@ export default function RoadmapBuilder() {
                   <input
                     type="text"
                     value={problemTitle}
-                    onChange={(e) => setProblemTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      setProblemTitle(e.target.value);
+                      if (e.target.value.trim() && problemErrors.includes('Problem Title is required')) {
+                        setProblemErrors(problemErrors.filter(err => err !== 'Problem Title is required'));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      problemErrors.some(e => e.includes('Title')) ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="e.g., Build Directional Map Solution"
                   />
                 </div>
@@ -492,9 +546,16 @@ export default function RoadmapBuilder() {
                   </label>
                   <textarea
                     value={problemDescription}
-                    onChange={(e) => setProblemDescription(e.target.value)}
+                    onChange={(e) => {
+                      setProblemDescription(e.target.value);
+                      if (e.target.value.trim() && problemErrors.includes('Problem Description is required')) {
+                        setProblemErrors(problemErrors.filter(err => err !== 'Problem Description is required'));
+                      }
+                    }}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      problemErrors.some(e => e.includes('Description')) ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="Describe the specific problem to solve..."
                   />
                 </div>
@@ -504,9 +565,16 @@ export default function RoadmapBuilder() {
                   </label>
                   <textarea
                     value={successCriteria}
-                    onChange={(e) => setSuccessCriteria(e.target.value)}
+                    onChange={(e) => {
+                      setSuccessCriteria(e.target.value);
+                      if (e.target.value.trim() && problemErrors.includes('What Success Looks Like is required')) {
+                        setProblemErrors(problemErrors.filter(err => err !== 'What Success Looks Like is required'));
+                      }
+                    }}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      problemErrors.some(e => e.includes('Success')) ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="Describe what success looks like for this problem..."
                   />
                 </div>
@@ -521,6 +589,19 @@ export default function RoadmapBuilder() {
                   >
                     <option value="tooling">🔧 Tooling/Infrastructure</option>
                     <option value="user-facing">👥 User-Facing Feature</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Priority *
+                  </label>
+                  <select
+                    value={problemPriority}
+                    onChange={(e) => setProblemPriority(e.target.value as 'must-have' | 'nice-to-have')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="must-have">Must Have</option>
+                    <option value="nice-to-have">Nice to Have</option>
                   </select>
                 </div>
                 <div>
@@ -554,67 +635,74 @@ export default function RoadmapBuilder() {
                       <span className="text-sm font-medium text-gray-700">Pre-Build Validation</span>
                     </label>
                     {hasPreBuildValidation && (
-                      <div className="ml-6 space-y-3 mt-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Pre-Build Methods (can select both) *
+                      <div className="ml-6 space-y-4 mt-2">
+                        {/* User Testing */}
+                        <div className="space-y-2">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={preBuildMethods.includes('user-testing')}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPreBuildMethods([...preBuildMethods, 'user-testing']);
+                                } else {
+                                  setPreBuildMethods(preBuildMethods.filter(m => m !== 'user-testing'));
+                                }
+                              }}
+                              className="mr-2"
+                            />
+                            <span className="text-sm font-medium text-gray-700">User Testing (Rapid/Paper Prototype)</span>
                           </label>
-                          <div className="space-y-2">
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={preBuildMethods.includes('user-testing')}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setPreBuildMethods([...preBuildMethods, 'user-testing']);
-                                  } else {
-                                    setPreBuildMethods(preBuildMethods.filter(m => m !== 'user-testing'));
-                                  }
-                                }}
-                                className="mr-2"
+                          {preBuildMethods.includes('user-testing') && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                User Testing Notes
+                              </label>
+                              <textarea
+                                value={preBuildUserTestingNotes}
+                                onChange={(e) => setPreBuildUserTestingNotes(e.target.value)}
+                                rows={2}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Describe what needs to be tested or validated before building..."
                               />
-                              <span className="text-sm">User Testing (Rapid/Paper Prototype)</span>
-                            </label>
-                            <label className="flex items-center">
+                            </div>
+                          )}
+                        </div>
+                        {/* Internal Experimentation */}
+                        <div className="space-y-2">
+                          <label className="flex items-center">
                               <input
                                 type="checkbox"
                                 checked={preBuildMethods.includes('internal-experimentation')}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setPreBuildMethods([...preBuildMethods, 'internal-experimentation']);
+                                    const newMethods: Array<'user-testing' | 'internal-experimentation'> = [...preBuildMethods, 'internal-experimentation'];
+                                    setPreBuildMethods(newMethods);
+                                    if (newMethods.length > 0 && problemErrors.includes('At least one Pre-Build Validation method must be selected')) {
+                                      setProblemErrors(problemErrors.filter(err => err !== 'At least one Pre-Build Validation method must be selected'));
+                                    }
                                   } else {
-                                    setPreBuildMethods(preBuildMethods.filter(m => m !== 'internal-experimentation'));
+                                    setPreBuildMethods(preBuildMethods.filter((m): m is 'user-testing' | 'internal-experimentation' => m !== 'internal-experimentation'));
                                   }
                                 }}
                                 className="mr-2"
                               />
-                              <span className="text-sm">Internal Experimentation</span>
-                            </label>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            User Testing Notes
+                            <span className="text-sm font-medium text-gray-700">Internal Experimentation</span>
                           </label>
-                          <textarea
-                            value={preBuildUserTestingNeeds}
-                            onChange={(e) => setPreBuildUserTestingNeeds(e.target.value)}
-                            rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Describe what needs to be tested or validated before building..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Internal Experimentation Notes
-                          </label>
-                          <textarea
-                            value={preBuildValidationNotes}
-                            onChange={(e) => setPreBuildValidationNotes(e.target.value)}
-                            rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Additional notes for pre-build validation..."
-                          />
+                          {preBuildMethods.includes('internal-experimentation') && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Internal Experimentation Notes
+                              </label>
+                              <textarea
+                                value={preBuildInternalExperimentationNotes}
+                                onChange={(e) => setPreBuildInternalExperimentationNotes(e.target.value)}
+                                rows={2}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Additional notes for internal experimentation..."
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -632,18 +720,74 @@ export default function RoadmapBuilder() {
                       <span className="text-sm font-medium text-gray-700">Post-Build Validation</span>
                     </label>
                     {hasPostBuildValidation && (
-                      <div className="ml-6 space-y-3 mt-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Post-Build Validation Notes
+                      <div className="ml-6 space-y-4 mt-2">
+                        {/* User Validation */}
+                        <div className="space-y-2">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={postBuildMethods.includes('user-validation')}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPostBuildMethods([...postBuildMethods, 'user-validation']);
+                                } else {
+                                  setPostBuildMethods(postBuildMethods.filter(m => m !== 'user-validation'));
+                                }
+                              }}
+                              className="mr-2"
+                            />
+                            <span className="text-sm font-medium text-gray-700">User Validation</span>
                           </label>
-                          <textarea
-                            value={postBuildValidationNotes}
-                            onChange={(e) => setPostBuildValidationNotes(e.target.value)}
-                            rows={2}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="What to validate after implementation..."
-                          />
+                          {postBuildMethods.includes('user-validation') && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                User Validation Notes
+                              </label>
+                              <textarea
+                                value={postBuildUserValidationNotes}
+                                onChange={(e) => setPostBuildUserValidationNotes(e.target.value)}
+                                rows={2}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="What to validate with users after implementation..."
+                              />
+                            </div>
+                          )}
+                        </div>
+                        {/* SME Evaluation */}
+                        <div className="space-y-2">
+                          <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={postBuildMethods.includes('sme-evaluation')}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    const newMethods: Array<'user-validation' | 'sme-evaluation'> = [...postBuildMethods, 'sme-evaluation'];
+                                    setPostBuildMethods(newMethods);
+                                    if (newMethods.length > 0 && problemErrors.includes('At least one Post-Build Validation method must be selected')) {
+                                      setProblemErrors(problemErrors.filter(err => err !== 'At least one Post-Build Validation method must be selected'));
+                                    }
+                                  } else {
+                                    setPostBuildMethods(postBuildMethods.filter((m): m is 'user-validation' | 'sme-evaluation' => m !== 'sme-evaluation'));
+                                  }
+                                }}
+                                className="mr-2"
+                              />
+                            <span className="text-sm font-medium text-gray-700">SME Evaluation</span>
+                          </label>
+                          {postBuildMethods.includes('sme-evaluation') && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                SME Evaluation Notes
+                              </label>
+                              <textarea
+                                value={postBuildSmeEvaluationNotes}
+                                onChange={(e) => setPostBuildSmeEvaluationNotes(e.target.value)}
+                                rows={2}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="What to validate with SMEs after implementation..."
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -665,12 +809,16 @@ export default function RoadmapBuilder() {
                         setSuccessCriteria('');
                         setProblemType('user-facing');
                         setProblemTimeline('now');
+                        setProblemPriority('must-have');
                         setHasPreBuildValidation(false);
                         setPreBuildMethods([]);
-                        setPreBuildUserTestingNeeds('');
-                        setPreBuildValidationNotes('');
+                        setPreBuildUserTestingNotes('');
+                        setPreBuildInternalExperimentationNotes('');
                         setHasPostBuildValidation(false);
-                        setPostBuildValidationNotes('');
+                        setPostBuildMethods([]);
+                        setPostBuildUserValidationNotes('');
+                        setPostBuildSmeEvaluationNotes('');
+                        setProblemErrors([]);
                       }}
                       className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                     >
@@ -745,95 +893,111 @@ export default function RoadmapBuilder() {
                 Last updated: {roadmap.metadata.lastUpdated}
               </div>
               
-              {/* Timeline Sections */}
-              {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
-                const sectionOutcomes = roadmap.outcomes.filter(o => 
-                  o.timeline.sections.includes(section)
-                );
-                if (sectionOutcomes.length === 0) return null;
+              {/* Timeline Sections - Horizontal Calendar View */}
+              <div className="grid grid-cols-3 gap-4">
+                {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
+                  const sectionOutcomes = roadmap.outcomes.filter(o => 
+                    o.timeline.sections.includes(section)
+                  );
 
-                return (
-                  <div key={section} className="mb-8">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">
-                      {roadmap.timeline[section].label}
-                    </h3>
-                    {sectionOutcomes.map(outcome => (
-                      <div key={outcome.id} className="mb-4">
-                        <div className="w-full bg-blue-900 text-white rounded-t-lg flex items-center">
-                          <button
-                            onClick={() => toggleOutcomeExpanded(outcome.id)}
-                            className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-blue-800 rounded-t-lg"
-                          >
-                            <span className="font-semibold">{outcome.title}</span>
-                            <span className="text-sm">{outcome.isExpanded ? '▼' : '▶'}</span>
-                          </button>
-                          <button
-                            onClick={() => handleEditOutcome(outcome.id)}
-                            className="px-3 py-1 mr-2 text-xs bg-blue-700 hover:bg-blue-600 rounded"
-                            title="Edit expected outcome"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                        {outcome.isExpanded && (
-                          <div className="border border-gray-200 rounded-b-lg p-4 bg-white">
-                            <p className="text-gray-700 mb-4">{outcome.description}</p>
-                            <div className="space-y-3">
-                              {outcome.problems
-                                .filter(p => p.timeline === section)
-                                .map(problem => (
-                                <div key={problem.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200 group hover:border-blue-300 transition-colors">
-                                  <div className="flex items-start gap-3">
-                                    <span className="text-2xl">{problem.icon}</span>
-                                    <div className="flex-1">
-                                      <div className="flex items-start justify-between gap-2 mb-1">
-                                        <h4 className="font-semibold text-gray-900">{problem.title}</h4>
-                                        <button
-                                          onClick={() => handleEditProblem(outcome.id, problem.id)}
-                                          className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity"
-                                          title="Edit problem to solve"
-                                        >
-                                          Edit
-                                        </button>
-                                      </div>
-                                      <p className="text-sm text-gray-700 mb-2">{problem.description}</p>
-                                      <div className="text-sm text-gray-600 mb-2">
-                                        <strong>Success looks like:</strong> {problem.successCriteria}
-                                      </div>
-                                      <div className="text-xs text-gray-600 space-y-1 mt-2 pt-2 border-t border-gray-300">
-                                        <div><strong>Feature/Functionality:</strong> {problem.type === 'tooling' ? '🔧 Tooling/Infrastructure' : '👥 User-Facing Feature'}</div>
-                                        {problem.validation.preBuild && (
-                                          <div>
-                                            <strong>Pre-Build Validation:</strong> {problem.validation.preBuild.methods.join(', ')}
-                                            {problem.validation.preBuild.userTestingNeeds && (
-                                              <div className="ml-2">User Testing Notes: {problem.validation.preBuild.userTestingNeeds}</div>
-                                            )}
-                                            {problem.validation.preBuild.validationNotes && (
-                                              <div className="ml-2">Internal Experimentation Notes: {problem.validation.preBuild.validationNotes}</div>
-                                            )}
+                  return (
+                    <div key={section} className="flex flex-col">
+                      {/* Column Header */}
+                      <div className="mb-4">
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {roadmap.timeline[section].label}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {roadmap.timeline[section].period}
+                        </p>
+                      </div>
+                      
+                      {/* Column Content */}
+                      <div className="flex-1 space-y-4 min-h-[200px]">
+                        {sectionOutcomes.length === 0 ? (
+                          <div className="text-sm text-gray-400 italic p-4 border border-dashed border-gray-300 rounded-lg">
+                            No items
+                          </div>
+                        ) : (
+                          sectionOutcomes.map(outcome => (
+                            <div key={outcome.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                              <div className="w-full bg-blue-900 text-white flex items-center">
+                                <button
+                                  onClick={() => toggleOutcomeExpanded(outcome.id)}
+                                  className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-blue-800"
+                                >
+                                  <span className="font-semibold text-sm">{outcome.title}</span>
+                                  <span className="text-xs">{outcome.isExpanded ? '▼' : '▶'}</span>
+                                </button>
+                                <button
+                                  onClick={() => handleEditOutcome(outcome.id)}
+                                  className="px-2 py-1 mr-2 text-xs bg-blue-700 hover:bg-blue-600 rounded"
+                                  title="Edit expected outcome"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                              {outcome.isExpanded && (
+                                <div className="border-t border-gray-200 p-3 bg-white">
+                                  <p className="text-xs text-gray-700 mb-3">{outcome.description}</p>
+                                  <div className="space-y-2">
+                                    {outcome.problems
+                                      .filter(p => p.timeline === section)
+                                      .map(problem => (
+                                      <div key={problem.id} className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors">
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-lg">{problem.icon}</span>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-2 mb-1">
+                                              <h4 className="font-semibold text-gray-900 text-sm">{problem.title}</h4>
+                                              <button
+                                                onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                                className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
+                                                title="Edit problem to solve"
+                                              >
+                                                Edit
+                                              </button>
+                                            </div>
+                                            <p className="text-xs text-gray-700 mb-2">{problem.description}</p>
+                                            <div className="text-xs text-gray-600 mb-2">
+                                              <strong>Success:</strong> {problem.successCriteria}
+                                            </div>
+                                            <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
+                                              <div><strong>Type:</strong> {problem.type === 'tooling' ? '🔧 Tooling' : '👥 User-Facing'}</div>
+                                              <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
+                                              <div>
+                                                <strong>Validation:</strong>
+                                                {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
+                                                  <div className="ml-2">
+                                                    <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
+                                                      m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
+                                                    ).join(', ')}
+                                                  </div>
+                                                )}
+                                                {problem.validation.postBuild && problem.validation.postBuild.methods && problem.validation.postBuild.methods.length > 0 && (
+                                                  <div className="ml-2">
+                                                    <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
+                                                      m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
+                                                    ).join(', ')}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
                                           </div>
-                                        )}
-                                        {problem.validation.postBuild && (
-                                          <div>
-                                            <strong>Post-Build Validation:</strong>
-                                            {problem.validation.postBuild.validationNotes && (
-                                              <div className="ml-2">Notes: {problem.validation.postBuild.validationNotes}</div>
-                                            )}
-                                          </div>
-                                        )}
+                                        </div>
                                       </div>
-                                    </div>
+                                    ))}
                                   </div>
                                 </div>
-                              ))}
+                              )}
                             </div>
-                          </div>
+                          ))
                         )}
                       </div>
-                    ))}
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
