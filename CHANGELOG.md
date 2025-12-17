@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2025-01-XX
+
+### Major Updates
+
+#### Features
+- **Spanning Outcome Bars (Instructure-Style)**
+  - Outcomes that span multiple timeline sections now display as a single bar across columns
+  - Black outcome bars for better visual distinction
+  - Problems positioned in their respective timeline columns under spanning outcomes
+  - Matches the Instructure roadmap visual style
+
+- **Collapsible Problem Cards**
+  - Problems show only title by default for high-level view
+  - Expand button (▶ More / ▼ Less) to show full details
+  - Individual problem expansion state
+  - Reduces visual clutter while allowing drill-down into details
+
+- **Quick Problem Addition**
+  - "Add Problem" buttons in empty sections replace "No problems" text
+  - Auto-pre-fills outcome and timeline section when clicked
+  - Seamless navigation to problems form
+
+- **Timeline Updates**
+  - Updated periods to 2026:
+    - NOW: January - March 2026
+    - NEXT: April - June 2026
+    - LATER: July - September 2026
+
+#### Improvements
+- Better visual organization with spanning bars
+- Cleaner high-level roadmap view
+- Improved user experience for adding problems from roadmap view
+
 ## [1.2.0] - 2025-01-XX
 
 ### Major Updates

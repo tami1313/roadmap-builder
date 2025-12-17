@@ -1,6 +1,12 @@
 # Version Information
 
-## Current Version: 1.2.0
+## Current Version: 1.3.0
+
+This version includes spanning outcome bars, collapsible problem cards, quick problem addition, and updated 2026 timeline periods.
+
+### Previous Versions
+
+## Version 1.2.0
 
 This version includes horizontal roadmap view, priority field, enhanced validation, and comprehensive error handling.
 
