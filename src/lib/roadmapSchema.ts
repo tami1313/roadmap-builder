@@ -13,17 +13,17 @@ export const defaultRoadmap: Roadmap = {
   timeline: {
     now: {
       label: 'NOW | Q3',
-      period: 'January - March 2025',
+      period: 'January - March 2026',
       quarters: ['Q3']
     },
     next: {
       label: 'NEXT | Q4',
-      period: 'April - June 2025',
+      period: 'April - June 2026',
       quarters: ['Q4']
     },
     later: {
       label: 'LATER | Q1',
-      period: 'July - September 2025',
+      period: 'July - September 2026',
       quarters: ['Q1']
     }
   },

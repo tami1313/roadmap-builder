@@ -16,6 +16,7 @@ export default function RoadmapBuilder() {
   const [editingOutcomeId, setEditingOutcomeId] = useState<string | null>(null);
   const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
   const [expandedOutcomeProblems, setExpandedOutcomeProblems] = useState<Set<string>>(new Set());
+  const [expandedProblems, setExpandedProblems] = useState<Set<string>>(new Set());
   const [outcomeErrors, setOutcomeErrors] = useState<string[]>([]);
   const [problemErrors, setProblemErrors] = useState<string[]>([]);
 
@@ -327,6 +328,18 @@ export default function RoadmapBuilder() {
         newSet.delete(outcomeId);
       } else {
         newSet.add(outcomeId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleProblemExpanded = (problemId: string) => {
+    setExpandedProblems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(problemId)) {
+        newSet.delete(problemId);
+      } else {
+        newSet.add(problemId);
       }
       return newSet;
     });
@@ -893,107 +906,161 @@ export default function RoadmapBuilder() {
                 Last updated: {roadmap.metadata.lastUpdated}
               </div>
               
-              {/* Timeline Sections - Horizontal Calendar View */}
-              <div className="grid grid-cols-3 gap-4">
-                {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
-                  const sectionOutcomes = roadmap.outcomes.filter(o => 
-                    o.timeline.sections.includes(section)
-                  );
+              {/* Timeline Sections - Horizontal Calendar View with Spanning Outcomes */}
+              <div className="space-y-6">
+                {/* Column Headers */}
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  {(['now', 'next', 'later'] as TimelineSection[]).map(section => (
+                    <div key={section}>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {roadmap.timeline[section].label}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {roadmap.timeline[section].period}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Outcomes with Spanning Bars */}
+                {roadmap.outcomes.map(outcome => {
+                  const sections = outcome.timeline.sections;
+                  const sectionArray: TimelineSection[] = ['now', 'next', 'later'];
+                  const startIndex = sectionArray.findIndex(s => sections.includes(s));
+                  const endIndex = sectionArray.findLastIndex(s => sections.includes(s));
+                  const colStart = startIndex + 1;
+                  const colEnd = endIndex + 2;
 
                   return (
-                    <div key={section} className="flex flex-col">
-                      {/* Column Header */}
-                      <div className="mb-4">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          {roadmap.timeline[section].label}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {roadmap.timeline[section].period}
-                        </p>
-                      </div>
-                      
-                      {/* Column Content */}
-                      <div className="flex-1 space-y-4 min-h-[200px]">
-                        {sectionOutcomes.length === 0 ? (
-                          <div className="text-sm text-gray-400 italic p-4 border border-dashed border-gray-300 rounded-lg">
-                            No items
+                    <div key={outcome.id} className="space-y-2">
+                      {/* Spanning Outcome Bar */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div 
+                          className="border border-gray-200 rounded-lg overflow-hidden bg-white"
+                          style={{
+                            gridColumn: `${colStart} / ${colEnd}`
+                          }}
+                        >
+                          <div className="w-full bg-black text-white flex items-center">
+                            <button
+                              onClick={() => toggleOutcomeExpanded(outcome.id)}
+                              className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-gray-800"
+                            >
+                              <span className="font-semibold text-sm">{outcome.title}</span>
+                              <span className="text-xs">{outcome.isExpanded ? '▼' : '▶'}</span>
+                            </button>
+                            <button
+                              onClick={() => handleEditOutcome(outcome.id)}
+                              className="px-2 py-1 mr-2 text-xs bg-gray-700 hover:bg-gray-600 rounded"
+                              title="Edit expected outcome"
+                            >
+                              Edit
+                            </button>
                           </div>
-                        ) : (
-                          sectionOutcomes.map(outcome => (
-                            <div key={outcome.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                              <div className="w-full bg-blue-900 text-white flex items-center">
-                                <button
-                                  onClick={() => toggleOutcomeExpanded(outcome.id)}
-                                  className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-blue-800"
-                                >
-                                  <span className="font-semibold text-sm">{outcome.title}</span>
-                                  <span className="text-xs">{outcome.isExpanded ? '▼' : '▶'}</span>
-                                </button>
-                                <button
-                                  onClick={() => handleEditOutcome(outcome.id)}
-                                  className="px-2 py-1 mr-2 text-xs bg-blue-700 hover:bg-blue-600 rounded"
-                                  title="Edit expected outcome"
-                                >
-                                  Edit
-                                </button>
-                              </div>
-                              {outcome.isExpanded && (
-                                <div className="border-t border-gray-200 p-3 bg-white">
-                                  <p className="text-xs text-gray-700 mb-3">{outcome.description}</p>
-                                  <div className="space-y-2">
-                                    {outcome.problems
-                                      .filter(p => p.timeline === section)
-                                      .map(problem => (
-                                      <div key={problem.id} className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors">
-                                        <div className="flex items-start gap-2">
-                                          <span className="text-lg">{problem.icon}</span>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-start justify-between gap-2 mb-1">
-                                              <h4 className="font-semibold text-gray-900 text-sm">{problem.title}</h4>
-                                              <button
-                                                onClick={() => handleEditProblem(outcome.id, problem.id)}
-                                                className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
-                                                title="Edit problem to solve"
-                                              >
-                                                Edit
-                                              </button>
-                                            </div>
-                                            <p className="text-xs text-gray-700 mb-2">{problem.description}</p>
-                                            <div className="text-xs text-gray-600 mb-2">
-                                              <strong>Success:</strong> {problem.successCriteria}
-                                            </div>
-                                            <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
-                                              <div><strong>Type:</strong> {problem.type === 'tooling' ? '🔧 Tooling' : '👥 User-Facing'}</div>
-                                              <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
-                                              <div>
-                                                <strong>Validation:</strong>
-                                                {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
-                                                  <div className="ml-2">
-                                                    <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
-                                                      m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
-                                                    ).join(', ')}
-                                                  </div>
-                                                )}
-                                                {problem.validation.postBuild && problem.validation.postBuild.methods && problem.validation.postBuild.methods.length > 0 && (
-                                                  <div className="ml-2">
-                                                    <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
-                                                      m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
-                                                    ).join(', ')}
-                                                  </div>
-                                                )}
+                          {outcome.isExpanded && (
+                            <div className="border-t border-gray-200 p-3 bg-white">
+                              <p className="text-xs text-gray-700">{outcome.description}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Problems in their respective columns */}
+                      {outcome.isExpanded && (
+                        <div className="grid grid-cols-3 gap-4">
+                          {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
+                            const sectionProblems = outcome.problems.filter(p => p.timeline === section);
+                            
+                            return (
+                              <div key={section} className="flex flex-col">
+                                <div className="space-y-2">
+                                  {sectionProblems.length === 0 ? (
+                                    sections.includes(section) && (
+                                      <button
+                                        onClick={() => {
+                                          setCurrentOutcomeId(outcome.id);
+                                          setProblemTimeline(section);
+                                          setPhase('problems');
+                                          // Scroll to top of problems form
+                                          setTimeout(() => {
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                          }, 100);
+                                        }}
+                                        className="w-full text-xs text-gray-500 italic p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
+                                      >
+                                        <span>+</span>
+                                        <span>Add Problem</span>
+                                      </button>
+                                    )
+                                  ) : (
+                                    sectionProblems.map(problem => {
+                                      const isExpanded = expandedProblems.has(problem.id);
+                                      return (
+                                        <div key={problem.id} className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors">
+                                          <div className="flex items-start gap-2">
+                                            <span className="text-lg">{problem.icon}</span>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-start justify-between gap-2 mb-1">
+                                                <div className="flex items-center gap-2 flex-1">
+                                                  <h4 className="font-semibold text-gray-900 text-sm">{problem.title}</h4>
+                                                  <button
+                                                    onClick={() => toggleProblemExpanded(problem.id)}
+                                                    className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                                                    title={isExpanded ? "Collapse details" : "Expand details"}
+                                                  >
+                                                    <span>{isExpanded ? '▼' : '▶'}</span>
+                                                    <span className="text-xs">{isExpanded ? 'Less' : 'More'}</span>
+                                                  </button>
+                                                </div>
+                                                <button
+                                                  onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                                  className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
+                                                  title="Edit problem to solve"
+                                                >
+                                                  Edit
+                                                </button>
                                               </div>
+                                              {isExpanded && (
+                                                <div className="mt-2 space-y-2">
+                                                  <p className="text-xs text-gray-700">{problem.description}</p>
+                                                  <div className="text-xs text-gray-600">
+                                                    <strong>Success:</strong> {problem.successCriteria}
+                                                  </div>
+                                                  <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
+                                                    <div><strong>Type:</strong> {problem.type === 'tooling' ? '🔧 Tooling' : '👥 User-Facing'}</div>
+                                                    <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
+                                                    <div>
+                                                      <strong>Validation:</strong>
+                                                      {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
+                                                        <div className="ml-2">
+                                                          <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
+                                                            m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
+                                                          ).join(', ')}
+                                                        </div>
+                                                      )}
+                                                      {problem.validation.postBuild && problem.validation.postBuild.methods && problem.validation.postBuild.methods.length > 0 && (
+                                                        <div className="ml-2">
+                                                          <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
+                                                            m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
+                                                          ).join(', ')}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                                      );
+                                    })
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          ))
-                        )}
-                      </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
