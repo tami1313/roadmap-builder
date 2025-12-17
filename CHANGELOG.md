@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2025-01-XX
+
+### Major Updates
+
+#### Features
+- **Delete Functionality**
+  - Delete buttons for outcomes and problems
+  - Confirmation modals with validation
+  - Outcome deletion with problem handling (delete or orphan)
+  - Problem deletion with simple confirmation
+
+- **Orphaned Problems Management**
+  - "Needs Outcomes Attached" section for problems without outcomes
+  - Edit orphaned problems to attach to outcomes
+  - Timeline mismatch warning when attaching problems
+  - Quick fix option to auto-update timeline
+
+- **Engineering Review Section**
+  - Engineering review checkbox and notes
+  - Risk level assessment (Low, Medium, High)
+  - Certainty field (displays on roadmap view)
+  - T-shirt size estimate (XS, S, M, L, XL, XXL)
+  - Confluence page URL (placeholder for MCP integration)
+  - JIRA epic URL (placeholder for integration)
+  - Visual indicators on roadmap (checkmark and certainty)
+
+- **Problem Type Updates**
+  - Separated Tooling and Infrastructure as distinct types
+  - Tooling: 🔧 (wrench icon)
+  - Infrastructure: ⚙️ (gear icon)
+  - User-Facing Feature: 👥 (unchanged)
+
+- **Roadmap View Improvements**
+  - Outcome sorting by start timeline (now > next > later)
+  - Always-visible "Add Problem" buttons below existing problems
+  - Engineering review status indicators
+
+#### Improvements
+- Better problem lifecycle management
+- Enhanced engineering workflow integration
+- Improved visual organization and prioritization
+
 ## [1.3.0] - 2025-01-XX
 
 ### Major Updates
