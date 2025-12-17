@@ -1,6 +1,18 @@
 # Version Information
 
-## Current Version: 1.3.0
+## Current Version: 1.5.0
+
+This version includes password-protected editor portal and error boundary component.
+
+### Previous Versions
+
+## Version 1.4.0
+
+This version includes delete functionality, orphaned problems management, engineering review section, timeline sorting, and problem type updates.
+
+### Previous Versions
+
+## Version 1.3.0
 
 This version includes spanning outcome bars, collapsible problem cards, quick problem addition, and updated 2026 timeline periods.
 
