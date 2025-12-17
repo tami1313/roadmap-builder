@@ -27,13 +27,15 @@ export const defaultRoadmap: Roadmap = {
       quarters: ['Q1']
     }
   },
-  outcomes: []
+  outcomes: [],
+  orphanedProblems: []
 };
 
 export const getIconForType = (type: string): string => {
   const icons: Record<string, string> = {
     'tooling': '🔧',
-    'user-facing': '👥'
+    'user-facing': '👥',
+    'infrastructure': '⚙️'
   };
   return icons[type] || '📋';
 };

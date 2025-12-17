@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Roadmap, Outcome, Problem, TimelineSection, Validation } from '@/types/roadmap';
+import { Roadmap, Outcome, Problem, TimelineSection, Validation, EngineeringReview } from '@/types/roadmap';
 import { defaultRoadmap, getIconForType } from '@/lib/roadmapSchema';
 import { saveRoadmap, loadRoadmap } from '@/lib/storage';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,6 +19,21 @@ export default function RoadmapBuilder() {
   const [expandedProblems, setExpandedProblems] = useState<Set<string>>(new Set());
   const [outcomeErrors, setOutcomeErrors] = useState<string[]>([]);
   const [problemErrors, setProblemErrors] = useState<string[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: 'problem' | 'outcome';
+    problemId?: string;
+    outcomeId?: string | null;
+    outcomeTitle?: string;
+    problems?: Array<{ id: string; title: string }>;
+    problemsToDelete?: Set<string>;
+  } | null>(null);
+  const [timelineMismatchWarning, setTimelineMismatchWarning] = useState<{
+    show: boolean;
+    problemTitle: string;
+    outcomeTitle: string;
+    problemTimeline: TimelineSection;
+    outcomeTimelines: TimelineSection[];
+  } | null>(null);
 
   // Form states for outcomes
   const [outcomeTitle, setOutcomeTitle] = useState('');
@@ -29,7 +44,7 @@ export default function RoadmapBuilder() {
   const [problemTitle, setProblemTitle] = useState('');
   const [problemDescription, setProblemDescription] = useState('');
   const [successCriteria, setSuccessCriteria] = useState('');
-  const [problemType, setProblemType] = useState<'tooling' | 'user-facing'>('user-facing');
+  const [problemType, setProblemType] = useState<'tooling' | 'user-facing' | 'infrastructure'>('user-facing');
   const [problemTimeline, setProblemTimeline] = useState<TimelineSection>('now');
   const [problemPriority, setProblemPriority] = useState<'must-have' | 'nice-to-have'>('must-have');
   // Validation states - can have both pre-build and post-build
@@ -41,6 +56,14 @@ export default function RoadmapBuilder() {
   const [postBuildMethods, setPostBuildMethods] = useState<Array<'user-validation' | 'sme-evaluation'>>([]);
   const [postBuildUserValidationNotes, setPostBuildUserValidationNotes] = useState('');
   const [postBuildSmeEvaluationNotes, setPostBuildSmeEvaluationNotes] = useState('');
+  // Engineering Review states
+  const [engineeringReviewed, setEngineeringReviewed] = useState(false);
+  const [engineeringNotes, setEngineeringNotes] = useState('');
+  const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high' | ''>('');
+  const [certainty, setCertainty] = useState('');
+  const [tshirtSize, setTshirtSize] = useState('');
+  const [confluenceUrl, setConfluenceUrl] = useState('');
+  const [jiraEpicUrl, setJiraEpicUrl] = useState('');
 
   useEffect(() => {
     const loaded = loadRoadmap();
@@ -170,7 +193,23 @@ export default function RoadmapBuilder() {
     // Clear errors if validation passes
     setProblemErrors([]);
 
+    // Check if we're editing an orphaned problem
+    const isOrphanedProblem = editingProblemId && !roadmap.outcomes.some(o => 
+      o.problems.some(p => p.id === editingProblemId)
+    );
+
     const validation: Validation = {};
+    
+    // Engineering Review
+    const engineeringReview: EngineeringReview | undefined = engineeringReviewed ? {
+      reviewed: engineeringReviewed,
+      notes: engineeringNotes || undefined,
+      riskLevel: riskLevel || undefined,
+      certainty: certainty || undefined,
+      tshirtSize: tshirtSize || undefined,
+      confluenceUrl: confluenceUrl || undefined,
+      jiraEpicUrl: jiraEpicUrl || undefined
+    } : undefined;
     
     if (hasPreBuildValidation && preBuildMethods.length > 0) {
       validation.preBuild = {
@@ -188,38 +227,94 @@ export default function RoadmapBuilder() {
       };
     }
 
-    if (editingProblemId && currentOutcomeId) {
-      // Update existing problem
-      setRoadmap(prev => ({
-        ...prev,
-        outcomes: prev.outcomes.map(outcome =>
-          outcome.id === currentOutcomeId
-            ? {
-                ...outcome,
-                problems: outcome.problems.map(problem =>
-                  problem.id === editingProblemId
-                    ? {
-                        ...problem,
-                        title: problemTitle,
-                        description: problemDescription,
-                        successCriteria: successCriteria,
-                        type: problemType || 'user-facing',
-                        icon: getIconForType(problemType || 'user-facing'),
-                        timeline: problemTimeline,
-                        priority: problemPriority,
-                        validation
-                      }
-                    : problem
-                )
-              }
-            : outcome
-        ),
-        metadata: {
-          ...prev.metadata,
-          lastUpdated: new Date().toISOString().split('T')[0]
+    if (editingProblemId) {
+      // Check if it's an orphaned problem
+      const isOrphaned = roadmap.orphanedProblems?.some(p => p.id === editingProblemId);
+      
+      if (isOrphaned && currentOutcomeId) {
+        // Moving orphaned problem to an outcome
+        const orphanedProblem = roadmap.orphanedProblems?.find(p => p.id === editingProblemId);
+        const targetOutcome = roadmap.outcomes.find(o => o.id === currentOutcomeId);
+        
+        if (orphanedProblem && targetOutcome) {
+          // Check if problem timeline matches outcome timeline
+          if (!targetOutcome.timeline.sections.includes(problemTimeline)) {
+            // Show warning - timeline mismatch
+            setTimelineMismatchWarning({
+              show: true,
+              problemTitle: problemTitle,
+              outcomeTitle: targetOutcome.title,
+              problemTimeline: problemTimeline,
+              outcomeTimelines: targetOutcome.timeline.sections
+            });
+            return; // Don't save yet
+          }
+
+          const updatedProblem: Problem = {
+            ...orphanedProblem,
+            title: problemTitle,
+            description: problemDescription,
+            successCriteria: successCriteria,
+            type: problemType || 'user-facing',
+            icon: getIconForType(problemType || 'user-facing'),
+            timeline: problemTimeline,
+            priority: problemPriority,
+            validation,
+            engineeringReview
+          };
+
+          setRoadmap(prev => ({
+            ...prev,
+            outcomes: prev.outcomes.map(outcome =>
+              outcome.id === currentOutcomeId
+                ? {
+                    ...outcome,
+                    problems: [...outcome.problems, updatedProblem]
+                  }
+                : outcome
+            ),
+            orphanedProblems: (prev.orphanedProblems || []).filter(p => p.id !== editingProblemId),
+            metadata: {
+              ...prev.metadata,
+              lastUpdated: new Date().toISOString().split('T')[0]
+            }
+          }));
+          setEditingProblemId(null);
         }
-      }));
-      setEditingProblemId(null);
+      } else if (currentOutcomeId) {
+        // Update existing problem in outcome
+        setRoadmap(prev => ({
+          ...prev,
+          outcomes: prev.outcomes.map(outcome =>
+            outcome.id === currentOutcomeId
+              ? {
+                  ...outcome,
+                  problems: outcome.problems.map(problem =>
+                    problem.id === editingProblemId
+                      ? {
+                          ...problem,
+                          title: problemTitle,
+                          description: problemDescription,
+                          successCriteria: successCriteria,
+                          type: problemType || 'user-facing',
+                          icon: getIconForType(problemType || 'user-facing'),
+                          timeline: problemTimeline,
+                          priority: problemPriority,
+                          validation,
+                          engineeringReview
+                        }
+                      : problem
+                  )
+                }
+              : outcome
+          ),
+          metadata: {
+            ...prev.metadata,
+            lastUpdated: new Date().toISOString().split('T')[0]
+          }
+        }));
+        setEditingProblemId(null);
+      }
     } else {
       // Add new problem
       const newProblem: Problem = {
@@ -231,7 +326,8 @@ export default function RoadmapBuilder() {
         icon: getIconForType(problemType || 'user-facing'),
         timeline: problemTimeline,
         priority: problemPriority,
-        validation
+        validation,
+        engineeringReview
       };
 
       setRoadmap(prev => ({
@@ -263,10 +359,80 @@ export default function RoadmapBuilder() {
     setPostBuildMethods([]);
     setPostBuildUserValidationNotes('');
     setPostBuildSmeEvaluationNotes('');
+    setEngineeringReviewed(false);
+    setEngineeringNotes('');
+    setRiskLevel('');
+    setCertainty('');
+    setTshirtSize('');
+    setConfluenceUrl('');
+    setJiraEpicUrl('');
     setProblemErrors([]);
   };
 
-  const handleEditProblem = (outcomeId: string, problemId: string) => {
+  const handleEditProblem = (outcomeId: string | null, problemId: string) => {
+    // Check if it's an orphaned problem
+    if (!outcomeId && roadmap.orphanedProblems) {
+      const orphanedProblem = roadmap.orphanedProblems.find(p => p.id === problemId);
+      if (orphanedProblem) {
+        setEditingProblemId(problemId);
+        setCurrentOutcomeId(null); // No outcome selected yet
+        setProblemTitle(orphanedProblem.title);
+        setProblemDescription(orphanedProblem.description);
+        setSuccessCriteria(orphanedProblem.successCriteria);
+        setProblemType(orphanedProblem.type);
+        setProblemTimeline(orphanedProblem.timeline);
+        setProblemPriority(orphanedProblem.priority);
+        
+        // Set validation fields
+        if (orphanedProblem.validation.preBuild) {
+          setHasPreBuildValidation(true);
+          setPreBuildMethods(orphanedProblem.validation.preBuild.methods || []);
+          setPreBuildUserTestingNotes(orphanedProblem.validation.preBuild.userTestingNotes || '');
+          setPreBuildInternalExperimentationNotes(orphanedProblem.validation.preBuild.internalExperimentationNotes || '');
+        } else {
+          setHasPreBuildValidation(false);
+          setPreBuildMethods([]);
+          setPreBuildUserTestingNotes('');
+          setPreBuildInternalExperimentationNotes('');
+        }
+        
+        if (orphanedProblem.validation.postBuild) {
+          setHasPostBuildValidation(true);
+          setPostBuildMethods(orphanedProblem.validation.postBuild.methods || []);
+          setPostBuildUserValidationNotes(orphanedProblem.validation.postBuild.userValidationNotes || '');
+          setPostBuildSmeEvaluationNotes(orphanedProblem.validation.postBuild.smeEvaluationNotes || '');
+        } else {
+          setHasPostBuildValidation(false);
+          setPostBuildMethods([]);
+          setPostBuildUserValidationNotes('');
+          setPostBuildSmeEvaluationNotes('');
+        }
+        
+        // Set engineering review fields
+        if (orphanedProblem.engineeringReview) {
+          setEngineeringReviewed(orphanedProblem.engineeringReview.reviewed);
+          setEngineeringNotes(orphanedProblem.engineeringReview.notes || '');
+          setRiskLevel(orphanedProblem.engineeringReview.riskLevel || '');
+          setCertainty(orphanedProblem.engineeringReview.certainty || '');
+          setTshirtSize(orphanedProblem.engineeringReview.tshirtSize || '');
+          setConfluenceUrl(orphanedProblem.engineeringReview.confluenceUrl || '');
+          setJiraEpicUrl(orphanedProblem.engineeringReview.jiraEpicUrl || '');
+        } else {
+          setEngineeringReviewed(false);
+          setEngineeringNotes('');
+          setRiskLevel('');
+          setCertainty('');
+          setTshirtSize('');
+          setConfluenceUrl('');
+          setJiraEpicUrl('');
+        }
+        
+        setPhase('problems');
+        return;
+      }
+    }
+
+    // Regular problem from an outcome
     const outcome = roadmap.outcomes.find(o => o.id === outcomeId);
     if (!outcome) return;
     
@@ -305,6 +471,25 @@ export default function RoadmapBuilder() {
       setPostBuildMethods([]);
       setPostBuildUserValidationNotes('');
       setPostBuildSmeEvaluationNotes('');
+    }
+    
+    // Set engineering review fields
+    if (problem.engineeringReview) {
+      setEngineeringReviewed(problem.engineeringReview.reviewed);
+      setEngineeringNotes(problem.engineeringReview.notes || '');
+      setRiskLevel(problem.engineeringReview.riskLevel || '');
+      setCertainty(problem.engineeringReview.certainty || '');
+      setTshirtSize(problem.engineeringReview.tshirtSize || '');
+      setConfluenceUrl(problem.engineeringReview.confluenceUrl || '');
+      setJiraEpicUrl(problem.engineeringReview.jiraEpicUrl || '');
+    } else {
+      setEngineeringReviewed(false);
+      setEngineeringNotes('');
+      setRiskLevel('');
+      setCertainty('');
+      setTshirtSize('');
+      setConfluenceUrl('');
+      setJiraEpicUrl('');
     }
     
     setPhase('problems');
@@ -351,6 +536,123 @@ export default function RoadmapBuilder() {
     } else {
       setOutcomeTimeline(prev => prev.filter(s => s !== section));
     }
+  };
+
+  const handleDeleteProblem = (outcomeId: string, problemId: string) => {
+    const outcome = roadmap.outcomes.find(o => o.id === outcomeId);
+    if (!outcome) return;
+    
+    const problem = outcome.problems.find(p => p.id === problemId);
+    if (!problem) return;
+
+    setDeleteConfirm({
+      type: 'problem',
+      problemId,
+      outcomeId
+    });
+  };
+
+  const handleDeleteOutcome = (outcomeId: string) => {
+    const outcome = roadmap.outcomes.find(o => o.id === outcomeId);
+    if (!outcome) return;
+
+    if (outcome.problems.length === 0) {
+      // No problems, simple confirmation
+      setDeleteConfirm({
+        type: 'outcome',
+        outcomeId,
+        outcomeTitle: outcome.title,
+        problems: []
+      });
+    } else {
+      // Has problems, show list with checkboxes
+      setDeleteConfirm({
+        type: 'outcome',
+        outcomeId,
+        outcomeTitle: outcome.title,
+        problems: outcome.problems.map(p => ({ id: p.id, title: p.title })),
+        problemsToDelete: new Set<string>()
+      });
+    }
+  };
+
+  const confirmDelete = () => {
+    if (!deleteConfirm) return;
+
+    if (deleteConfirm.type === 'problem') {
+      // Delete problem (either from outcome or orphaned)
+      if (deleteConfirm.outcomeId) {
+        // Delete from outcome
+        setRoadmap(prev => ({
+          ...prev,
+          outcomes: prev.outcomes.map(outcome =>
+            outcome.id === deleteConfirm.outcomeId
+              ? {
+                  ...outcome,
+                  problems: outcome.problems.filter(p => p.id !== deleteConfirm.problemId)
+                }
+              : outcome
+          ),
+          metadata: {
+            ...prev.metadata,
+            lastUpdated: new Date().toISOString().split('T')[0]
+          }
+        }));
+      } else {
+        // Delete orphaned problem
+        setRoadmap(prev => ({
+          ...prev,
+          orphanedProblems: (prev.orphanedProblems || []).filter(p => p.id !== deleteConfirm.problemId),
+          metadata: {
+            ...prev.metadata,
+            lastUpdated: new Date().toISOString().split('T')[0]
+          }
+        }));
+      }
+    } else if (deleteConfirm.type === 'outcome') {
+      const outcome = roadmap.outcomes.find(o => o.id === deleteConfirm.outcomeId);
+      if (!outcome) return;
+
+      const problemsToDelete = deleteConfirm.problemsToDelete || new Set<string>();
+      const problemsToOrphan = outcome.problems.filter(p => !problemsToDelete.has(p.id));
+      const problemsToDeleteList = outcome.problems.filter(p => problemsToDelete.has(p.id));
+
+      setRoadmap(prev => ({
+        ...prev,
+        outcomes: prev.outcomes.filter(o => o.id !== deleteConfirm.outcomeId),
+        orphanedProblems: [
+          ...(prev.orphanedProblems || []),
+          ...problemsToOrphan
+        ],
+        metadata: {
+          ...prev.metadata,
+          lastUpdated: new Date().toISOString().split('T')[0]
+        }
+      }));
+    }
+
+    setDeleteConfirm(null);
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirm(null);
+  };
+
+  const toggleProblemDeleteCheckbox = (problemId: string) => {
+    if (!deleteConfirm || deleteConfirm.type !== 'outcome') return;
+    
+    setDeleteConfirm({
+      ...deleteConfirm,
+      problemsToDelete: (() => {
+        const newSet = new Set(deleteConfirm.problemsToDelete || []);
+        if (newSet.has(problemId)) {
+          newSet.delete(problemId);
+        } else {
+          newSet.add(problemId);
+        }
+        return newSet;
+      })()
+    });
   };
 
   return (
@@ -519,21 +821,46 @@ export default function RoadmapBuilder() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Select Expected Outcome *
               </label>
-              <select
-                value={currentOutcomeId || ''}
-                onChange={(e) => setCurrentOutcomeId(e.target.value || null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Select an expected outcome --</option>
-                {roadmap.outcomes.map(outcome => (
-                  <option key={outcome.id} value={outcome.id}>
-                    {outcome.title}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2 mb-2">
+                <select
+                  value={currentOutcomeId || ''}
+                  onChange={(e) => {
+                    setCurrentOutcomeId(e.target.value || null);
+                    if (e.target.value && problemErrors.includes('An Expected Outcome must be selected')) {
+                      setProblemErrors(problemErrors.filter(err => err !== 'An Expected Outcome must be selected'));
+                    }
+                  }}
+                  className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    problemErrors.some(e => e.includes('Expected Outcome')) ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                  }`}
+                >
+                  <option value="">-- Select an expected outcome --</option>
+                  {roadmap.outcomes.map(outcome => (
+                    <option key={outcome.id} value={outcome.id}>
+                      {outcome.title}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    setPhase('outcomes');
+                    setTimeout(() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }, 100);
+                  }}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm whitespace-nowrap"
+                  title="Add new expected outcome"
+                >
+                  + New Outcome
+                </button>
+              </div>
+              {editingProblemId && !currentOutcomeId && (
+                <p className="text-xs text-amber-600 italic">
+                  This problem is currently orphaned. Select an outcome above to attach it, or create a new outcome.
+                </p>
+              )}
             </div>
-            {currentOutcomeId && (
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Problem Title *
@@ -597,11 +924,12 @@ export default function RoadmapBuilder() {
                   </label>
                   <select
                     value={problemType}
-                    onChange={(e) => setProblemType(e.target.value as 'tooling' | 'user-facing')}
+                    onChange={(e) => setProblemType(e.target.value as 'tooling' | 'user-facing' | 'infrastructure')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="tooling">🔧 Tooling/Infrastructure</option>
+                    <option value="tooling">🔧 Tooling</option>
                     <option value="user-facing">👥 User-Facing Feature</option>
+                    <option value="infrastructure">⚙️ Infrastructure</option>
                   </select>
                 </div>
                 <div>
@@ -805,6 +1133,113 @@ export default function RoadmapBuilder() {
                       </div>
                     )}
                   </div>
+
+                  {/* Engineering Review */}
+                  <div className="mt-6 pt-6 border-t border-gray-300">
+                    <h4 className="text-md font-semibold text-gray-900 mb-4">Engineering Review</h4>
+                    <div className="space-y-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={engineeringReviewed}
+                          onChange={(e) => setEngineeringReviewed(e.target.checked)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Engineering has reviewed</span>
+                      </label>
+                      
+                      {engineeringReviewed && (
+                        <div className="ml-6 space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Notes (Follow-up / Deeper Dive)
+                            </label>
+                            <textarea
+                              value={engineeringNotes}
+                              onChange={(e) => setEngineeringNotes(e.target.value)}
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Any follow-up needed or deeper dive required..."
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Risk Level
+                            </label>
+                            <select
+                              value={riskLevel}
+                              onChange={(e) => setRiskLevel(e.target.value as 'low' | 'medium' | 'high' | '')}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Select risk level...</option>
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Certainty
+                            </label>
+                            <input
+                              type="text"
+                              value={certainty}
+                              onChange={(e) => setCertainty(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="e.g., 75%, High, Medium confidence..."
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              T-Shirt Size Estimate
+                            </label>
+                            <select
+                              value={tshirtSize}
+                              onChange={(e) => setTshirtSize(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">Select size...</option>
+                              <option value="XS">XS</option>
+                              <option value="S">S</option>
+                              <option value="M">M</option>
+                              <option value="L">L</option>
+                              <option value="XL">XL</option>
+                              <option value="XXL">XXL</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Confluence Page URL
+                            </label>
+                            <input
+                              type="url"
+                              value={confluenceUrl}
+                              onChange={(e) => setConfluenceUrl(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="https://confluence.example.com/..."
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              JIRA Epic URL
+                            </label>
+                            <input
+                              type="url"
+                              value={jiraEpicUrl}
+                              onChange={(e) => setJiraEpicUrl(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="https://jira.example.com/..."
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -839,8 +1274,7 @@ export default function RoadmapBuilder() {
                     </button>
                   )}
                 </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -873,13 +1307,22 @@ export default function RoadmapBuilder() {
                                   Success: {problem.successCriteria.substring(0, 50)}{problem.successCriteria.length > 50 ? '...' : ''}
                                 </p>
                               </div>
-                              <button
-                                onClick={() => handleEditProblem(outcome.id, problem.id)}
-                                className="ml-3 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                                title="Edit problem to solve"
-                              >
-                                Edit
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                                  title="Edit problem to solve"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProblem(outcome.id, problem.id)}
+                                  className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+                                  title="Delete problem to solve"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -923,7 +1366,17 @@ export default function RoadmapBuilder() {
                 </div>
 
                 {/* Outcomes with Spanning Bars */}
-                {roadmap.outcomes.map(outcome => {
+                {roadmap.outcomes
+                  .sort((a, b) => {
+                    // Sort by start timeline: now > next > later
+                    const getStartPriority = (outcome: typeof a): number => {
+                      if (outcome.timeline.sections.includes('now')) return 1;
+                      if (outcome.timeline.sections.includes('next')) return 2;
+                      return 3; // only later
+                    };
+                    return getStartPriority(a) - getStartPriority(b);
+                  })
+                  .map(outcome => {
                   const sections = outcome.timeline.sections;
                   const sectionArray: TimelineSection[] = ['now', 'next', 'later'];
                   const startIndex = sectionArray.findIndex(s => sections.includes(s));
@@ -956,6 +1409,13 @@ export default function RoadmapBuilder() {
                             >
                               Edit
                             </button>
+                            <button
+                              onClick={() => handleDeleteOutcome(outcome.id)}
+                              className="px-2 py-1 mr-2 text-xs bg-red-700 hover:bg-red-600 rounded"
+                              title="Delete expected outcome"
+                            >
+                              Delete
+                            </button>
                           </div>
                           {outcome.isExpanded && (
                             <div className="border-t border-gray-200 p-3 bg-white">
@@ -969,7 +1429,14 @@ export default function RoadmapBuilder() {
                       {outcome.isExpanded && (
                         <div className="grid grid-cols-3 gap-4">
                           {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
-                            const sectionProblems = outcome.problems.filter(p => p.timeline === section);
+                            const sectionProblems = outcome.problems
+                              .filter(p => p.timeline === section)
+                              .sort((a, b) => {
+                                // Must-have comes before nice-to-have
+                                if (a.priority === 'must-have' && b.priority === 'nice-to-have') return -1;
+                                if (a.priority === 'nice-to-have' && b.priority === 'must-have') return 1;
+                                return 0; // Keep original order for same priority
+                              });
                             
                             return (
                               <div key={section} className="flex flex-col">
@@ -993,67 +1460,116 @@ export default function RoadmapBuilder() {
                                       </button>
                                     )
                                   ) : (
-                                    sectionProblems.map(problem => {
-                                      const isExpanded = expandedProblems.has(problem.id);
-                                      return (
-                                        <div key={problem.id} className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors">
-                                          <div className="flex items-start gap-2">
-                                            <span className="text-lg">{problem.icon}</span>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-start justify-between gap-2 mb-1">
-                                                <div className="flex items-center gap-2 flex-1">
-                                                  <h4 className="font-semibold text-gray-900 text-sm">{problem.title}</h4>
-                                                  <button
-                                                    onClick={() => toggleProblemExpanded(problem.id)}
-                                                    className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
-                                                    title={isExpanded ? "Collapse details" : "Expand details"}
-                                                  >
-                                                    <span>{isExpanded ? '▼' : '▶'}</span>
-                                                    <span className="text-xs">{isExpanded ? 'Less' : 'More'}</span>
-                                                  </button>
-                                                </div>
-                                                <button
-                                                  onClick={() => handleEditProblem(outcome.id, problem.id)}
-                                                  className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
-                                                  title="Edit problem to solve"
-                                                >
-                                                  Edit
-                                                </button>
-                                              </div>
-                                              {isExpanded && (
-                                                <div className="mt-2 space-y-2">
-                                                  <p className="text-xs text-gray-700">{problem.description}</p>
-                                                  <div className="text-xs text-gray-600">
-                                                    <strong>Success:</strong> {problem.successCriteria}
+                                    <>
+                                      {sectionProblems.map(problem => {
+                                        const isExpanded = expandedProblems.has(problem.id);
+                                        return (
+                                          <div key={problem.id} className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors">
+                                            <div className="flex items-start gap-2">
+                                              <span className="text-lg">{problem.icon}</span>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                  <div className="flex items-center gap-2 flex-1">
+                                                    <h4 className="font-semibold text-gray-900 text-sm">{problem.title}</h4>
+                                                    {problem.engineeringReview?.reviewed && (
+                                                      <span className="text-green-600" title="Engineering reviewed">✓</span>
+                                                    )}
+                                                    {problem.engineeringReview?.certainty && (
+                                                      <span className="text-xs text-gray-500">({problem.engineeringReview.certainty})</span>
+                                                    )}
+                                                    <button
+                                                      onClick={() => toggleProblemExpanded(problem.id)}
+                                                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                                                      title={isExpanded ? "Collapse details" : "Expand details"}
+                                                    >
+                                                      <span>{isExpanded ? '▼' : '▶'}</span>
+                                                      <span className="text-xs">{isExpanded ? 'Less' : 'More'}</span>
+                                                    </button>
                                                   </div>
-                                                  <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
-                                                    <div><strong>Type:</strong> {problem.type === 'tooling' ? '🔧 Tooling' : '👥 User-Facing'}</div>
-                                                    <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
-                                                    <div>
-                                                      <strong>Validation:</strong>
-                                                      {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
-                                                        <div className="ml-2">
-                                                          <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
-                                                            m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
-                                                          ).join(', ')}
-                                                        </div>
-                                                      )}
-                                                      {problem.validation.postBuild && problem.validation.postBuild.methods && problem.validation.postBuild.methods.length > 0 && (
-                                                        <div className="ml-2">
-                                                          <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
-                                                            m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
-                                                          ).join(', ')}
+                                                  <div className="flex gap-1">
+                                                    <button
+                                                      onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                                      className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
+                                                      title="Edit problem to solve"
+                                                    >
+                                                      Edit
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleDeleteProblem(outcome.id, problem.id)}
+                                                      className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-opacity flex-shrink-0"
+                                                      title="Delete problem to solve"
+                                                    >
+                                                      Delete
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                                {isExpanded && (
+                                                  <div className="mt-2 space-y-2">
+                                                    <p className="text-xs text-gray-700">{problem.description}</p>
+                                                    <div className="text-xs text-gray-600">
+                                                      <strong>Success:</strong> {problem.successCriteria}
+                                                    </div>
+                                                    <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
+                                                      <div><strong>Type:</strong> {
+                                                        problem.type === 'tooling' ? '🔧 Tooling' : 
+                                                        problem.type === 'infrastructure' ? '⚙️ Infrastructure' : 
+                                                        '👥 User-Facing'
+                                                      }</div>
+                                                      <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
+                                                      <div>
+                                                        <strong>Validation:</strong>
+                                                        {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
+                                                          <div className="ml-2">
+                                                            <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
+                                                              m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
+                                                            ).join(', ')}
+                                                          </div>
+                                                        )}
+                                                        {problem.validation.postBuild && problem.validation.postBuild.methods && problem.validation.postBuild.methods.length > 0 && (
+                                                          <div className="ml-2">
+                                                            <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
+                                                              m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
+                                                            ).join(', ')}
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                      {problem.engineeringReview && (
+                                                        <div className="mt-2 pt-2 border-t border-gray-300">
+                                                          <div><strong>Engineering Review:</strong> {problem.engineeringReview.reviewed ? '✓ Reviewed' : 'Not reviewed'}</div>
+                                                          {problem.engineeringReview.certainty && (
+                                                            <div><strong>Certainty:</strong> {problem.engineeringReview.certainty}</div>
+                                                          )}
+                                                          {problem.engineeringReview.riskLevel && (
+                                                            <div><strong>Risk:</strong> {problem.engineeringReview.riskLevel.charAt(0).toUpperCase() + problem.engineeringReview.riskLevel.slice(1)}</div>
+                                                          )}
                                                         </div>
                                                       )}
                                                     </div>
                                                   </div>
-                                                </div>
-                                              )}
+                                                )}
+                                              </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      );
-                                    })
+                                        );
+                                      })}
+                                      {sections.includes(section) && (
+                                        <button
+                                          onClick={() => {
+                                            setCurrentOutcomeId(outcome.id);
+                                            setProblemTimeline(section);
+                                            setPhase('problems');
+                                            // Scroll to top of problems form
+                                            setTimeout(() => {
+                                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                                            }, 100);
+                                          }}
+                                          className="w-full text-xs text-gray-500 italic p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                          <span>+</span>
+                                          <span>Add Problem</span>
+                                        </button>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1120,13 +1636,22 @@ export default function RoadmapBuilder() {
                                     <h6 className="font-medium text-gray-900 text-sm">{problem.title}</h6>
                                     <p className="text-sm text-gray-600 mt-1">{problem.description}</p>
                                   </div>
-                                  <button
-                                    onClick={() => handleEditProblem(outcome.id, problem.id)}
-                                    className="ml-3 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                                    title="Edit problem to solve"
-                                  >
-                                    Edit
-                                  </button>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                      className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                                      title="Edit problem to solve"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteProblem(outcome.id, problem.id)}
+                                      className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+                                      title="Delete problem to solve"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -1143,6 +1668,221 @@ export default function RoadmapBuilder() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Orphaned Problems Section */}
+        {phase === 'complete' && roadmap.orphanedProblems && roadmap.orphanedProblems.length > 0 && (
+          <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Needs Outcomes Attached</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              The following problems need to be attached to an expected outcome:
+            </p>
+            <div className="space-y-3">
+              {roadmap.orphanedProblems.map(problem => (
+                <div key={problem.id} className="bg-yellow-50 rounded p-4 border border-yellow-200">
+                  <div className="flex items-start gap-2">
+                    <span className="text-lg">{problem.icon}</span>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900 text-sm mb-1">{problem.title}</h4>
+                      <p className="text-xs text-gray-700 mb-2">{problem.description}</p>
+                      <p className="text-xs text-gray-600">
+                        Timeline: {problem.timeline.toUpperCase()} | 
+                        Priority: {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditProblem(null, problem.id)}
+                        className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                        title="Edit and attach to outcome"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProblem('', problem.id)}
+                        className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+                        title="Delete orphaned problem"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              {deleteConfirm.type === 'problem' ? (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Problem to Solve?</h3>
+                  <p className="text-sm text-gray-700 mb-6">
+                    Are you sure you want to delete this problem? This action cannot be undone.
+                  </p>
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={cancelDelete}
+                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                    >
+                      No
+                    </button>
+                    <button
+                      onClick={confirmDelete}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                    >
+                      Yes, Delete
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Expected Outcome?</h3>
+                  <p className="text-sm text-gray-700 mb-4">
+                    Are you sure you want to delete "{deleteConfirm.outcomeTitle}"?
+                  </p>
+                  {deleteConfirm.problems && deleteConfirm.problems.length > 0 ? (
+                    <>
+                      <p className="text-sm font-medium text-gray-900 mb-3">
+                        The following problems to solve are attached to this outcome:
+                      </p>
+                      <div className="mb-4 max-h-60 overflow-y-auto border border-gray-200 rounded p-3">
+                        {deleteConfirm.problems.map(problem => (
+                          <label key={problem.id} className="flex items-center gap-2 mb-2 p-2 hover:bg-gray-50 rounded">
+                            <input
+                              type="checkbox"
+                              checked={deleteConfirm.problemsToDelete?.has(problem.id) || false}
+                              onChange={() => toggleProblemDeleteCheckbox(problem.id)}
+                              className="mr-2"
+                            />
+                            <span className="text-sm text-gray-700">{problem.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-600 mb-4">
+                        Check the boxes above to delete those problems. Unchecked problems will be moved to "Needs Outcomes Attached".
+                      </p>
+                      <div className="flex gap-3 justify-end">
+                        <button
+                          onClick={cancelDelete}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={confirmDelete}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                        >
+                          Yes, Delete
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-700 mb-6">
+                        This action cannot be undone.
+                      </p>
+                      <div className="flex gap-3 justify-end">
+                        <button
+                          onClick={cancelDelete}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                        >
+                          No
+                        </button>
+                        <button
+                          onClick={confirmDelete}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                        >
+                          Yes, Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Timeline Mismatch Warning Modal */}
+        {timelineMismatchWarning && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline Mismatch</h3>
+              <p className="text-sm text-gray-700 mb-4">
+                The problem "<strong>{timelineMismatchWarning.problemTitle}</strong>" has a timeline of <strong>{timelineMismatchWarning.problemTimeline.toUpperCase()}</strong>, but the expected outcome "<strong>{timelineMismatchWarning.outcomeTitle}</strong>" spans <strong>{timelineMismatchWarning.outcomeTimelines.map(t => t.toUpperCase()).join(', ')}</strong>.
+              </p>
+              <p className="text-sm text-gray-700 mb-6">
+                Please update the problem's timeline to match one of the outcome's timeline sections.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setTimelineMismatchWarning(null)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Update the timeline to the first matching section
+                    if (timelineMismatchWarning.outcomeTimelines.length > 0) {
+                      setProblemTimeline(timelineMismatchWarning.outcomeTimelines[0]);
+                      setTimelineMismatchWarning(null);
+                      // Re-trigger save by calling handleAddProblem again
+                      setTimeout(() => {
+                        handleAddProblem();
+                      }, 100);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Update to {timelineMismatchWarning.outcomeTimelines[0]?.toUpperCase() || 'Match'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Timeline Mismatch Warning Modal */}
+        {timelineMismatchWarning && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline Mismatch</h3>
+              <p className="text-sm text-gray-700 mb-4">
+                The problem "<strong>{timelineMismatchWarning.problemTitle}</strong>" has a timeline of <strong>{timelineMismatchWarning.problemTimeline.toUpperCase()}</strong>, but the expected outcome "<strong>{timelineMismatchWarning.outcomeTitle}</strong>" spans <strong>{timelineMismatchWarning.outcomeTimelines.map(t => t.toUpperCase()).join(', ')}</strong>.
+              </p>
+              <p className="text-sm text-gray-700 mb-6">
+                Please update the problem's timeline to match one of the outcome's timeline sections.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setTimelineMismatchWarning(null)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Update the timeline to the first matching section
+                    if (timelineMismatchWarning.outcomeTimelines.length > 0) {
+                      setProblemTimeline(timelineMismatchWarning.outcomeTimelines[0]);
+                      setTimelineMismatchWarning(null);
+                      // Re-trigger save by calling handleAddProblem again
+                      setTimeout(() => {
+                        handleAddProblem();
+                      }, 100);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Update to {timelineMismatchWarning.outcomeTimelines[0]?.toUpperCase() || 'Match'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

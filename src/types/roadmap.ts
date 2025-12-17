@@ -1,6 +1,6 @@
 export type TimelineSection = 'now' | 'next' | 'later';
 
-export type ProblemType = 'tooling' | 'user-facing';
+export type ProblemType = 'tooling' | 'user-facing' | 'infrastructure';
 
 export type PreBuildMethod = 'user-testing' | 'internal-experimentation';
 export type PostBuildMethod = 'user-validation' | 'sme-evaluation';
@@ -31,6 +31,17 @@ export interface TimelineIteration {
 }
 
 export type Priority = 'must-have' | 'nice-to-have';
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface EngineeringReview {
+  reviewed: boolean;
+  notes?: string;
+  riskLevel?: RiskLevel;
+  certainty?: string; // Open text field, will display as percentage on roadmap
+  tshirtSize?: string; // T-shirt size estimate (XS, S, M, L, XL, XXL, etc.)
+  confluenceUrl?: string;
+  jiraEpicUrl?: string;
+}
 
 export interface Problem {
   id: string;
@@ -42,6 +53,7 @@ export interface Problem {
   timeline: TimelineSection; // Just the bucket
   priority: Priority;
   validation: Validation;
+  engineeringReview?: EngineeringReview;
   // Internal roadmap fields (added later by dev lead):
   scope?: Scope;
   detailedTimeline?: {
@@ -95,5 +107,6 @@ export interface Roadmap {
     };
   };
   outcomes: Outcome[];
+  orphanedProblems?: Problem[]; // Problems without an outcome
 }
 
