@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2025-01-XX
+
+### Security & Error Handling
+
+#### Features
+- **Password-Protected Editor Portal**
+  - Added password authentication to the editor (root route)
+  - Default password: `MASPMroadmapeditor`
+  - Configurable via `NEXT_PUBLIC_ROADMAP_EDITOR_PASSWORD` environment variable
+  - Session-based authentication (persists during browser session)
+  - Clean password entry form with error handling
+
+- **Error Boundary Component**
+  - Added `error.tsx` for Next.js error handling
+  - User-friendly error display with "Try again" functionality
+  - Proper error logging and recovery
+
+#### Improvements
+- Better error handling and user experience
+- Secure editor access with password protection
+
 ## [1.3.0] - 2025-01-XX
 
 ### Major Updates
