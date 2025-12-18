@@ -79,27 +79,20 @@ export default function RoadmapBuilder() {
     const loaded = loadRoadmap();
     if (loaded) {
       // Migrate: Initialize displayOrder for existing problems that don't have it
+      // Preserve the current array order by using the index within each timeline section
       const migrated = {
         ...loaded,
         outcomes: loaded.outcomes.map(outcome => {
-          // Group problems by timeline section and initialize displayOrder
-          const problemsBySection = new Map<TimelineSection, Problem[]>();
-          outcome.problems.forEach(problem => {
-            if (!problemsBySection.has(problem.timeline)) {
-              problemsBySection.set(problem.timeline, []);
-            }
-            problemsBySection.get(problem.timeline)!.push(problem);
-          });
-
-          // Initialize displayOrder for each section based on current array order
-          const migratedProblems = outcome.problems.map((problem, index) => {
+          // For each timeline section, initialize displayOrder based on current array order
+          const migratedProblems = outcome.problems.map((problem) => {
             if (problem.displayOrder === undefined) {
-              // Find the index within this timeline section
-              const sectionProblems = problemsBySection.get(problem.timeline) || [];
+              // Find all problems in the same timeline section
+              const sectionProblems = outcome.problems.filter(p => p.timeline === problem.timeline);
+              // Find this problem's index within its section (preserving current order)
               const sectionIndex = sectionProblems.findIndex(p => p.id === problem.id);
               return {
                 ...problem,
-                displayOrder: sectionIndex >= 0 ? sectionIndex : index
+                displayOrder: sectionIndex >= 0 ? sectionIndex : 0
               };
             }
             return problem;
@@ -1941,17 +1934,16 @@ export default function RoadmapBuilder() {
                               );
                             }
 
+                            // Get problems for this section, preserving manual order only
+                            // No auto-sorting - only use displayOrder from drag-and-drop
                             const sectionProblems = outcome.problems
                               .filter(p => p.timeline === section)
                               .filter(matchesFilters) // Apply all filters
                               .sort((a, b) => {
-                                // First sort by priority (must-have before nice-to-have)
-                                if (a.priority === 'must-have' && b.priority === 'nice-to-have') return -1;
-                                if (a.priority === 'nice-to-have' && b.priority === 'must-have') return 1;
-                                // Then sort by displayOrder (manual drag-and-drop order)
-                                // If displayOrder is not set, use the original array index as fallback
-                                const aOrder = a.displayOrder !== undefined ? a.displayOrder : outcome.problems.findIndex(p => p.id === a.id);
-                                const bOrder = b.displayOrder !== undefined ? b.displayOrder : outcome.problems.findIndex(p => p.id === b.id);
+                                // Only sort by displayOrder (manual drag-and-drop order)
+                                // displayOrder should always be set, but use 0 as fallback
+                                const aOrder = a.displayOrder ?? 0;
+                                const bOrder = b.displayOrder ?? 0;
                                 return aOrder - bOrder;
                               });
                             
