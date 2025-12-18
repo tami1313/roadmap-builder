@@ -1,6 +1,18 @@
 # Version Information
 
-## Current Version: 1.4.0
+## Current Version: 1.6.0
+
+This version includes drag-and-drop reordering, enhanced filter UI, success notifications, and learning validation updates.
+
+### Previous Versions
+
+## Version 1.5.0
+
+This version includes password-protected editor portal and error boundary component.
+
+### Previous Versions
+
+## Version 1.4.0
 
 This version includes delete functionality, orphaned problems management, engineering review section, timeline sorting, and problem type updates.
 
@@ -45,4 +57,3 @@ git log v1.0.0..HEAD
 ```bash
 git checkout -b new-feature-branch v1.0.0
 ```
-
