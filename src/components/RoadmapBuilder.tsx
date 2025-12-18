@@ -750,7 +750,7 @@ export default function RoadmapBuilder() {
     });
   };
 
-  // Handle drag end with @dnd-kit
+  // Handle drag end with @dnd-kit - Simplified approach
   const handleDragEnd = (event: DragEndEvent, outcomeId: string, timelineSection: TimelineSection) => {
     const { active, over } = event;
 
@@ -779,35 +779,30 @@ export default function RoadmapBuilder() {
       // Reorder using arrayMove from @dnd-kit
       const reorderedSectionProblems = arrayMove(sectionProblems, oldIndex, newIndex);
 
-      // Update displayOrder for all reordered problems in this section
-      const reorderedWithOrder = reorderedSectionProblems.map((problem, index) => ({
-        ...problem,
-        displayOrder: index
-      }));
+      // Create a map of new displayOrder values by problem ID
+      const newDisplayOrders = new Map<string, number>();
+      reorderedSectionProblems.forEach((problem, index) => {
+        newDisplayOrders.set(problem.id, index);
+      });
 
-      // Create a set of section problem IDs for quick lookup
-      const sectionProblemIds = new Set(reorderedWithOrder.map(p => p.id));
-
-      // Rebuild the full problems array
-      const allProblems: Problem[] = [];
-      let reorderedIndex = 0;
-      
-      for (const problem of outcome.problems) {
-        if (problem.timeline === timelineSection && sectionProblemIds.has(problem.id)) {
-          // This is a section problem - use the reordered version
-          allProblems.push(reorderedWithOrder[reorderedIndex]);
-          reorderedIndex++;
-        } else {
-          // This is a problem from another section - keep as-is
-          allProblems.push(problem);
+      // Update problems in place - just update displayOrder for section problems
+      const updatedProblems = outcome.problems.map(problem => {
+        if (problem.timeline === timelineSection && newDisplayOrders.has(problem.id)) {
+          const newOrder = newDisplayOrders.get(problem.id)!;
+          console.log(`Updating ${problem.id} displayOrder from ${problem.displayOrder} to ${newOrder}`);
+          return {
+            ...problem,
+            displayOrder: newOrder
+          };
         }
-      }
+        return problem;
+      });
 
       const updated = {
         ...prev,
         outcomes: prev.outcomes.map(o =>
           o.id === outcomeId
-            ? { ...o, problems: allProblems }
+            ? { ...o, problems: updatedProblems }
             : o
         ),
         metadata: {
@@ -816,7 +811,11 @@ export default function RoadmapBuilder() {
         }
       };
       
-      // Save to localStorage
+      console.log('Updated roadmap:', updated.outcomes.find(o => o.id === outcomeId)?.problems
+        .filter(p => p.timeline === timelineSection)
+        .map(p => ({ id: p.id, title: p.title, displayOrder: p.displayOrder })));
+      
+      // Save to localStorage immediately
       saveRoadmap(updated);
       return updated;
     });
