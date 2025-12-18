@@ -595,6 +595,7 @@ export default function RoadmapBuilder() {
 
   const handleDragOver = (e: React.DragEvent, problemId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     if (draggedProblemId && draggedProblemId !== problemId) {
       setDragOverProblemId(problemId);
@@ -615,54 +616,63 @@ export default function RoadmapBuilder() {
       return;
     }
 
-    const outcome = roadmap.outcomes.find(o => o.id === outcomeId);
-    if (!outcome) {
-      setDraggedProblemId(null);
-      return;
-    }
-
-    // Get all problems for this timeline section
-    const sectionProblems = outcome.problems.filter(p => p.timeline === timelineSection);
-    
-    // Find the indices of the dragged and target problems within the section
-    const draggedIndex = sectionProblems.findIndex(p => p.id === draggedProblemId);
-    const targetIndex = sectionProblems.findIndex(p => p.id === targetProblemId);
-
-    if (draggedIndex === -1 || targetIndex === -1) {
-      setDraggedProblemId(null);
-      return;
-    }
-
-    // Reorder the problems within this section
-    const reorderedSectionProblems = [...sectionProblems];
-    const [draggedProblem] = reorderedSectionProblems.splice(draggedIndex, 1);
-    reorderedSectionProblems.splice(targetIndex, 0, draggedProblem);
-
-    // Update displayOrder for all reordered problems in this section
-    const reorderedWithOrder = reorderedSectionProblems.map((problem, index) => ({
-      ...problem,
-      displayOrder: index
-    }));
-
-    // Rebuild the full problems array:
-    // 1. Find the first index where a section problem appears
-    // 2. Keep all problems before that index
-    // 3. Insert all reordered section problems with updated displayOrder
-    // 4. Keep all problems after the last section problem
-    const firstSectionIndex = outcome.problems.findIndex(p => p.timeline === timelineSection);
-    const lastSectionIndex = outcome.problems.map((p, i) => ({ p, i }))
-      .filter(({ p }) => p.timeline === timelineSection)
-      .map(({ i }) => i)
-      .pop() || firstSectionIndex;
-
-    const allProblems = [
-      ...outcome.problems.slice(0, firstSectionIndex), // Problems before section
-      ...reorderedWithOrder, // Reordered section problems with displayOrder
-      ...outcome.problems.slice(lastSectionIndex + 1) // Problems after section
-    ];
-
-    // Update the outcome with reordered problems
+    // Use functional update to ensure we have the latest state
     setRoadmap(prev => {
+      const outcome = prev.outcomes.find(o => o.id === outcomeId);
+      if (!outcome) {
+        setDraggedProblemId(null);
+        return prev;
+      }
+
+      // Get all problems for this timeline section, sorted by current displayOrder
+      const sectionProblems = outcome.problems
+        .filter(p => p.timeline === timelineSection)
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+      
+      // Find the indices of the dragged and target problems within the section
+      const draggedIndex = sectionProblems.findIndex(p => p.id === draggedProblemId);
+      const targetIndex = sectionProblems.findIndex(p => p.id === targetProblemId);
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        setDraggedProblemId(null);
+        return prev;
+      }
+
+      // Reorder the problems within this section
+      const reorderedSectionProblems = [...sectionProblems];
+      const [draggedProblem] = reorderedSectionProblems.splice(draggedIndex, 1);
+      reorderedSectionProblems.splice(targetIndex, 0, draggedProblem);
+
+      // Update displayOrder for all reordered problems in this section
+      const reorderedWithOrder = reorderedSectionProblems.map((problem, index) => ({
+        ...problem,
+        displayOrder: index
+      }));
+
+      // Create a map of updated problems by ID for quick lookup
+      const updatedProblemsMap = new Map(reorderedWithOrder.map(p => [p.id, p]));
+      
+      // Create a set of section problem IDs for quick lookup
+      const sectionProblemIds = new Set(reorderedWithOrder.map(p => p.id));
+
+      // Rebuild the full problems array:
+      // 1. Separate section problems from others
+      // 2. Replace section problems with reordered ones
+      // 3. Maintain relative positions of other problems
+      const allProblems: Problem[] = [];
+      let reorderedIndex = 0;
+      
+      for (const problem of outcome.problems) {
+        if (problem.timeline === timelineSection && sectionProblemIds.has(problem.id)) {
+          // This is a section problem - use the reordered version
+          allProblems.push(reorderedWithOrder[reorderedIndex]);
+          reorderedIndex++;
+        } else {
+          // This is a problem from another section - keep as-is
+          allProblems.push(problem);
+        }
+      }
+
       const updated = {
         ...prev,
         outcomes: prev.outcomes.map(o =>
@@ -675,6 +685,7 @@ export default function RoadmapBuilder() {
           lastUpdated: new Date().toISOString().split('T')[0]
         }
       };
+      
       // Save to localStorage
       saveRoadmap(updated);
       return updated;
