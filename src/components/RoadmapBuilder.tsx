@@ -568,6 +568,7 @@ export default function RoadmapBuilder() {
 
   const handleDrop = (e: React.DragEvent, targetProblemId: string, outcomeId: string, timelineSection: TimelineSection) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverProblemId(null);
 
     if (!draggedProblemId || draggedProblemId === targetProblemId) {
@@ -598,27 +599,41 @@ export default function RoadmapBuilder() {
     const [draggedProblem] = reorderedSectionProblems.splice(draggedIndex, 1);
     reorderedSectionProblems.splice(targetIndex, 0, draggedProblem);
 
-    // Reconstruct the full problems array:
-    // Keep problems from other timeline sections in their original order
-    // Replace section problems with reordered ones
-    const allProblems = outcome.problems.map(problem => {
-      if (problem.timeline === timelineSection) {
-        // Find this problem's new position in reordered array
-        const newIndex = reorderedSectionProblems.findIndex(p => p.id === problem.id);
-        return newIndex >= 0 ? reorderedSectionProblems[newIndex] : problem;
-      }
-      return problem;
-    });
+    // Rebuild the full problems array:
+    // 1. Find the first index where a section problem appears
+    // 2. Keep all problems before that index
+    // 3. Insert all reordered section problems
+    // 4. Keep all problems after the last section problem
+    const firstSectionIndex = outcome.problems.findIndex(p => p.timeline === timelineSection);
+    const lastSectionIndex = outcome.problems.map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.timeline === timelineSection)
+      .map(({ i }) => i)
+      .pop() || firstSectionIndex;
+
+    const allProblems = [
+      ...outcome.problems.slice(0, firstSectionIndex), // Problems before section
+      ...reorderedSectionProblems, // Reordered section problems
+      ...outcome.problems.slice(lastSectionIndex + 1) // Problems after section
+    ];
 
     // Update the outcome with reordered problems
-    setRoadmap(prev => ({
-      ...prev,
-      outcomes: prev.outcomes.map(o =>
-        o.id === outcomeId
-          ? { ...o, problems: allProblems }
-          : o
-      )
-    }));
+    setRoadmap(prev => {
+      const updated = {
+        ...prev,
+        outcomes: prev.outcomes.map(o =>
+          o.id === outcomeId
+            ? { ...o, problems: allProblems }
+            : o
+        ),
+        metadata: {
+          ...prev.metadata,
+          lastUpdated: new Date().toISOString().split('T')[0]
+        }
+      };
+      // Save to localStorage
+      saveRoadmap(updated);
+      return updated;
+    });
 
     setDraggedProblemId(null);
   };
