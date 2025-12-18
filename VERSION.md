@@ -1,6 +1,15 @@
 # Version Information
 
-## Current Version: 1.6.0
+## Current Version: 1.6.1
+
+This version removes drag-and-drop functionality (non-functional). All other features remain stable and working.
+
+### Known Issues
+- Drag-and-drop UI elements may still be visible but functionality has been removed (see KNOWN_ISSUES.md)
+
+### Previous Versions
+
+## Version 1.6.0
 
 This version includes drag-and-drop reordering, enhanced filter UI, success notifications, and learning validation updates.
 

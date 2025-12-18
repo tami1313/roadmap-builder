@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1] - 2025-01-XX
+
+### Maintenance & Stability
+
+#### Changes
+- **Removed Drag-and-Drop Functionality**
+  - Removed all drag-and-drop code and dependencies
+  - Simplified problem card rendering
+  - Known issue: Some drag-and-drop UI elements may still be visible but are non-functional (see KNOWN_ISSUES.md)
+
+#### Stability
+- Build is stable and all core functionality works correctly
+- All features except drag-and-drop are fully functional
+- Safe to use for roadmap building
+
 ## [1.6.0] - 2025-01-XX
 
 ### Features & Enhancements
