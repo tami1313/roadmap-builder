@@ -85,9 +85,14 @@ export default function RoadmapBuilder() {
         return 4; // fallback for unknown types
       };
 
+      console.log('Migration: Starting reorder of existing problems');
+      console.log('Loaded outcomes:', loaded.outcomes.length);
+
       const migrated = {
         ...loaded,
-        outcomes: loaded.outcomes.map(outcome => {
+        outcomes: loaded.outcomes.map((outcome, outcomeIndex) => {
+          console.log(`Processing outcome ${outcomeIndex + 1}: ${outcome.title}, ${outcome.problems.length} problems`);
+          
           // Group problems by timeline section and reorder each section
           const problemsBySection = new Map<TimelineSection, Problem[]>();
           
@@ -102,28 +107,37 @@ export default function RoadmapBuilder() {
           // Reorder problems within each section by type, then update displayOrder
           const reorderedProblems: Problem[] = [];
           
-          // Process each timeline section
-          problemsBySection.forEach((sectionProblems, section) => {
-            // Sort by type priority
-            const sorted = [...sectionProblems].sort((a, b) => {
-              const aPriority = getTypePriority(a.type);
-              const bPriority = getTypePriority(b.type);
-              if (aPriority !== bPriority) {
-                return aPriority - bPriority;
-              }
-              // If same type, maintain existing order (use displayOrder if available)
-              const aOrder = a.displayOrder ?? 0;
-              const bOrder = b.displayOrder ?? 0;
-              return aOrder - bOrder;
-            });
-            
-            // Update displayOrder for sorted problems
-            sorted.forEach((problem, index) => {
-              reorderedProblems.push({
-                ...problem,
-                displayOrder: index
+          // Process each timeline section in order
+          const sections: TimelineSection[] = ['now', 'next', 'later'];
+          sections.forEach(section => {
+            const sectionProblems = problemsBySection.get(section) || [];
+            if (sectionProblems.length > 0) {
+              console.log(`  Section ${section}: ${sectionProblems.length} problems`);
+              console.log(`    Before sort:`, sectionProblems.map(p => ({ title: p.title, type: p.type })));
+              
+              // Sort by type priority
+              const sorted = [...sectionProblems].sort((a, b) => {
+                const aPriority = getTypePriority(a.type);
+                const bPriority = getTypePriority(b.type);
+                if (aPriority !== bPriority) {
+                  return aPriority - bPriority;
+                }
+                // If same type, maintain existing order (use displayOrder if available)
+                const aOrder = a.displayOrder ?? 0;
+                const bOrder = b.displayOrder ?? 0;
+                return aOrder - bOrder;
               });
-            });
+              
+              console.log(`    After sort:`, sorted.map(p => ({ title: p.title, type: p.type })));
+              
+              // Update displayOrder for sorted problems
+              sorted.forEach((problem, index) => {
+                reorderedProblems.push({
+                  ...problem,
+                  displayOrder: index
+                });
+              });
+            }
           });
 
           return {
@@ -133,15 +147,14 @@ export default function RoadmapBuilder() {
         })
       };
       
-      // Only update if there are actual changes (to avoid unnecessary re-renders)
-      const hasChanges = JSON.stringify(loaded) !== JSON.stringify(migrated);
-      if (hasChanges) {
-        setRoadmap(migrated);
-        // Save the migrated data
-        saveRoadmap(migrated);
-      } else {
-        setRoadmap(loaded);
-      }
+      console.log('Migration: Completed reordering');
+      console.log('Migrated outcomes:', migrated.outcomes.length);
+      
+      // Always update to ensure migration runs
+      setRoadmap(migrated);
+      // Save the migrated data
+      saveRoadmap(migrated);
+      console.log('Migration: Data saved to localStorage');
       
       if (migrated.outcomes.length > 0) {
         setPhase('problems');
