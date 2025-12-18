@@ -76,33 +76,73 @@ export default function RoadmapBuilder() {
   useEffect(() => {
     const loaded = loadRoadmap();
     if (loaded) {
-      // Migrate: Initialize displayOrder for existing problems that don't have it
-      // Preserve the current array order by using the index within each timeline section
+      // Migration: Reorder existing problems by type (user-facing > tooling > infrastructure)
+      // This ensures retroactive ordering for existing data
+      const getTypePriority = (type: string): number => {
+        if (type === 'user-facing') return 1;
+        if (type === 'tooling') return 2;
+        if (type === 'infrastructure') return 3;
+        return 4; // fallback for unknown types
+      };
+
       const migrated = {
         ...loaded,
         outcomes: loaded.outcomes.map(outcome => {
-          // For each timeline section, initialize displayOrder based on current array order
-          const migratedProblems = outcome.problems.map((problem) => {
-            if (problem.displayOrder === undefined) {
-              // Find all problems in the same timeline section
-              const sectionProblems = outcome.problems.filter(p => p.timeline === problem.timeline);
-              // Find this problem's index within its section (preserving current order)
-              const sectionIndex = sectionProblems.findIndex(p => p.id === problem.id);
-              return {
-                ...problem,
-                displayOrder: sectionIndex >= 0 ? sectionIndex : 0
-              };
+          // Group problems by timeline section and reorder each section
+          const problemsBySection = new Map<TimelineSection, Problem[]>();
+          
+          // Group problems by their timeline section
+          outcome.problems.forEach(problem => {
+            if (!problemsBySection.has(problem.timeline)) {
+              problemsBySection.set(problem.timeline, []);
             }
-            return problem;
+            problemsBySection.get(problem.timeline)!.push(problem);
+          });
+
+          // Reorder problems within each section by type, then update displayOrder
+          const reorderedProblems: Problem[] = [];
+          
+          // Process each timeline section
+          problemsBySection.forEach((sectionProblems, section) => {
+            // Sort by type priority
+            const sorted = [...sectionProblems].sort((a, b) => {
+              const aPriority = getTypePriority(a.type);
+              const bPriority = getTypePriority(b.type);
+              if (aPriority !== bPriority) {
+                return aPriority - bPriority;
+              }
+              // If same type, maintain existing order (use displayOrder if available)
+              const aOrder = a.displayOrder ?? 0;
+              const bOrder = b.displayOrder ?? 0;
+              return aOrder - bOrder;
+            });
+            
+            // Update displayOrder for sorted problems
+            sorted.forEach((problem, index) => {
+              reorderedProblems.push({
+                ...problem,
+                displayOrder: index
+              });
+            });
           });
 
           return {
             ...outcome,
-            problems: migratedProblems
+            problems: reorderedProblems
           };
         })
       };
-      setRoadmap(migrated);
+      
+      // Only update if there are actual changes (to avoid unnecessary re-renders)
+      const hasChanges = JSON.stringify(loaded) !== JSON.stringify(migrated);
+      if (hasChanges) {
+        setRoadmap(migrated);
+        // Save the migrated data
+        saveRoadmap(migrated);
+      } else {
+        setRoadmap(loaded);
+      }
+      
       if (migrated.outcomes.length > 0) {
         setPhase('problems');
       }
