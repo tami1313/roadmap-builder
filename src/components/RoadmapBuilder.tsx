@@ -329,7 +329,7 @@ export default function RoadmapBuilder() {
         
         if (orphanedProblem && targetOutcome) {
           // Check if problem timeline matches outcome timeline
-          if (!targetOutcome.timeline.sections.includes(problemTimeline)) {
+          if (!targetOutcome.timeline?.sections || !targetOutcome.timeline.sections.includes(problemTimeline)) {
             // Show warning - timeline mismatch
             setTimelineMismatchWarning({
               show: true,
@@ -1476,6 +1476,7 @@ export default function RoadmapBuilder() {
                   .sort((a, b) => {
                     // Sort by start timeline: now > next > later
                     const getStartPriority = (outcome: typeof a): number => {
+                      if (!outcome.timeline || !outcome.timeline.sections || outcome.timeline.sections.length === 0) return 4;
                       if (outcome.timeline.sections.includes('now')) return 1;
                       if (outcome.timeline.sections.includes('next')) return 2;
                       return 3; // only later
@@ -1842,6 +1843,7 @@ export default function RoadmapBuilder() {
                   .sort((a, b) => {
                     // Sort by start timeline: now > next > later
                     const getStartPriority = (outcome: typeof a): number => {
+                      if (!outcome.timeline || !outcome.timeline.sections || outcome.timeline.sections.length === 0) return 4;
                       if (outcome.timeline.sections.includes('now')) return 1;
                       if (outcome.timeline.sections.includes('next')) return 2;
                       return 3; // only later
@@ -1849,7 +1851,7 @@ export default function RoadmapBuilder() {
                     return getStartPriority(a) - getStartPriority(b);
                   })
                   .map(outcome => {
-                  const sections = outcome.timeline.sections;
+                  const sections = outcome.timeline?.sections || [];
                   const sectionArray: TimelineSection[] = ['now', 'next', 'later'];
                   const startIndex = sectionArray.findIndex(s => sections.includes(s));
                   const endIndex = sectionArray.findLastIndex(s => sections.includes(s));
@@ -2103,6 +2105,7 @@ export default function RoadmapBuilder() {
                   .sort((a, b) => {
                     // Sort by start timeline: now > next > later
                     const getStartPriority = (outcome: typeof a): number => {
+                      if (!outcome.timeline || !outcome.timeline.sections || outcome.timeline.sections.length === 0) return 4;
                       if (outcome.timeline.sections.includes('now')) return 1;
                       if (outcome.timeline.sections.includes('next')) return 2;
                       return 3; // only later
