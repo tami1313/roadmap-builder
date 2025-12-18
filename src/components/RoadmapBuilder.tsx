@@ -85,7 +85,8 @@ export default function RoadmapBuilder() {
         return 4; // fallback for unknown types
       };
 
-      console.log('Migration: Starting reorder of existing problems');
+      console.log('🔧 Migration: Starting reorder of existing problems');
+      console.warn('🔧 MIGRATION RUNNING - Check if problems reorder by type');
       console.log('Loaded outcomes:', loaded.outcomes.length);
 
       const migrated = {
@@ -147,14 +148,26 @@ export default function RoadmapBuilder() {
         })
       };
       
-      console.log('Migration: Completed reordering');
+      console.log('✅ Migration: Completed reordering');
+      console.warn('✅ MIGRATION COMPLETE - Problems should now be ordered by type');
       console.log('Migrated outcomes:', migrated.outcomes.length);
+      
+      // Debug: Log first outcome's problems to verify ordering
+      if (migrated.outcomes.length > 0 && migrated.outcomes[0].problems.length > 0) {
+        const firstOutcome = migrated.outcomes[0];
+        const nowProblems = firstOutcome.problems.filter(p => p.timeline === 'now');
+        if (nowProblems.length > 0) {
+          console.log('📋 Sample ordering check (first outcome, NOW section):', 
+            nowProblems.map(p => ({ title: p.title.substring(0, 30), type: p.type }))
+          );
+        }
+      }
       
       // Always update to ensure migration runs
       setRoadmap(migrated);
       // Save the migrated data
       saveRoadmap(migrated);
-      console.log('Migration: Data saved to localStorage');
+      console.log('💾 Migration: Data saved to localStorage');
       
       if (migrated.outcomes.length > 0) {
         setPhase('problems');
