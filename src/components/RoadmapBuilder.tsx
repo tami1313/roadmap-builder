@@ -858,8 +858,44 @@ export default function RoadmapBuilder() {
         )}
         
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Roadmap Builder</h1>
-          <p className="text-gray-600">Last updated: {roadmap.metadata.lastUpdated}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Roadmap Builder</h1>
+              <p className="text-gray-600">Last updated: {roadmap.metadata.lastUpdated}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const data = exportRoadmap(roadmap);
+                  navigator.clipboard.writeText(data);
+                  alert('Roadmap data copied to clipboard! Paste it in another browser to import.');
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                title="Export roadmap data to transfer between browsers"
+              >
+                Export Data
+              </button>
+              <button
+                onClick={() => {
+                  const paste = prompt('Paste roadmap data to import:');
+                  if (paste) {
+                    const imported = importRoadmap(paste);
+                    if (imported) {
+                      setRoadmap(imported);
+                      saveRoadmap(imported);
+                      alert('Roadmap imported successfully!');
+                    } else {
+                      alert('Error importing roadmap. Please check the data format.');
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                title="Import roadmap data from another browser"
+              >
+                Import Data
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Phase Indicator */}
