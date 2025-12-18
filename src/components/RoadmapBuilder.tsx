@@ -34,6 +34,16 @@ export default function RoadmapBuilder() {
     problemTimeline: TimelineSection;
     outcomeTimelines: TimelineSection[];
   } | null>(null);
+  const [draggedProblemId, setDraggedProblemId] = useState<string | null>(null);
+  const [dragOverProblemId, setDragOverProblemId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Filter states
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedFilterType, setSelectedFilterType] = useState<'priority' | 'type' | 'learning-validation' | 'timeline' | null>(null);
+  const [priorityFilters, setPriorityFilters] = useState<Set<'must-have' | 'nice-to-have'>>(new Set(['must-have', 'nice-to-have']));
+  const [typeFilters, setTypeFilters] = useState<Set<'tooling' | 'user-facing' | 'infrastructure'>>(new Set(['tooling', 'user-facing', 'infrastructure']));
+  const [hasLearningValidation, setHasLearningValidation] = useState<boolean | null>(null); // null = show all, true = has validation, false = no validation
+  const [timelineFilters, setTimelineFilters] = useState<Set<TimelineSection>>(new Set(['now', 'next', 'later']));
 
   // Form states for outcomes
   const [outcomeTitle, setOutcomeTitle] = useState('');
@@ -143,6 +153,10 @@ export default function RoadmapBuilder() {
           lastUpdated: new Date().toISOString().split('T')[0]
         }
       }));
+      
+      // Show success message
+      setSuccessMessage('Expected Outcome added successfully!');
+      setTimeout(() => setSuccessMessage(null), 1000);
     }
 
     // Reset form
@@ -342,6 +356,10 @@ export default function RoadmapBuilder() {
           lastUpdated: new Date().toISOString().split('T')[0]
         }
       }));
+      
+      // Show success message
+      setSuccessMessage('Problem to Solve added successfully!');
+      setTimeout(() => setSuccessMessage(null), 1000);
     }
 
     // Reset form
@@ -530,6 +548,153 @@ export default function RoadmapBuilder() {
     });
   };
 
+  const handleDragStart = (e: React.DragEvent, problemId: string) => {
+    setDraggedProblemId(problemId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', problemId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, problemId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedProblemId && draggedProblemId !== problemId) {
+      setDragOverProblemId(problemId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverProblemId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetProblemId: string, outcomeId: string, timelineSection: TimelineSection) => {
+    e.preventDefault();
+    setDragOverProblemId(null);
+
+    if (!draggedProblemId || draggedProblemId === targetProblemId) {
+      setDraggedProblemId(null);
+      return;
+    }
+
+    const outcome = roadmap.outcomes.find(o => o.id === outcomeId);
+    if (!outcome) {
+      setDraggedProblemId(null);
+      return;
+    }
+
+    // Get all problems for this timeline section
+    const sectionProblems = outcome.problems.filter(p => p.timeline === timelineSection);
+    
+    // Find the indices of the dragged and target problems within the section
+    const draggedIndex = sectionProblems.findIndex(p => p.id === draggedProblemId);
+    const targetIndex = sectionProblems.findIndex(p => p.id === targetProblemId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedProblemId(null);
+      return;
+    }
+
+    // Reorder the problems within this section
+    const reorderedSectionProblems = [...sectionProblems];
+    const [draggedProblem] = reorderedSectionProblems.splice(draggedIndex, 1);
+    reorderedSectionProblems.splice(targetIndex, 0, draggedProblem);
+
+    // Reconstruct the full problems array:
+    // Keep problems from other timeline sections in their original order
+    // Replace section problems with reordered ones
+    const allProblems = outcome.problems.map(problem => {
+      if (problem.timeline === timelineSection) {
+        // Find this problem's new position in reordered array
+        const newIndex = reorderedSectionProblems.findIndex(p => p.id === problem.id);
+        return newIndex >= 0 ? reorderedSectionProblems[newIndex] : problem;
+      }
+      return problem;
+    });
+
+    // Update the outcome with reordered problems
+    setRoadmap(prev => ({
+      ...prev,
+      outcomes: prev.outcomes.map(o =>
+        o.id === outcomeId
+          ? { ...o, problems: allProblems }
+          : o
+      )
+    }));
+
+    setDraggedProblemId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedProblemId(null);
+    setDragOverProblemId(null);
+  };
+
+  // Filter helper function
+  const matchesFilters = (problem: Problem): boolean => {
+    // Priority filter
+    if (!priorityFilters.has(problem.priority)) {
+      return false;
+    }
+
+    // Type filter
+    if (!typeFilters.has(problem.type)) {
+      return false;
+    }
+
+    // Learning Validation filter
+    if (hasLearningValidation !== null) {
+      const hasValidation = !!(problem.validation.preBuild?.methods.length || problem.validation.postBuild?.methods.length);
+      if (hasLearningValidation !== hasValidation) {
+        return false;
+      }
+    }
+
+    // Timeline filter is handled separately when filtering by section
+    return true;
+  };
+
+  const togglePriorityFilter = (priority: 'must-have' | 'nice-to-have') => {
+    setPriorityFilters(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(priority)) {
+        newSet.delete(priority);
+      } else {
+        newSet.add(priority);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleTypeFilter = (type: 'tooling' | 'user-facing' | 'infrastructure') => {
+    setTypeFilters(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(type)) {
+        newSet.delete(type);
+      } else {
+        newSet.add(type);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleTimelineFilter = (timeline: TimelineSection) => {
+    setTimelineFilters(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(timeline)) {
+        newSet.delete(timeline);
+      } else {
+        newSet.add(timeline);
+      }
+      return newSet;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setPriorityFilters(new Set(['must-have', 'nice-to-have']));
+    setTypeFilters(new Set(['tooling', 'user-facing', 'infrastructure']));
+    setHasLearningValidation(null);
+    setTimelineFilters(new Set(['now', 'next', 'later']));
+  };
+
   const handleTimelineChange = (section: TimelineSection, checked: boolean) => {
     if (checked) {
       setOutcomeTimeline(prev => [...prev, section]);
@@ -658,6 +823,14 @@ export default function RoadmapBuilder() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto">
+        {/* Success Notification */}
+        {successMessage && (
+          <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-fade-in">
+            <span className="text-xl">✓</span>
+            <span className="font-semibold">{successMessage}</span>
+          </div>
+        )}
+        
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Roadmap Builder</h1>
           <p className="text-gray-600">Last updated: {roadmap.metadata.lastUpdated}</p>
@@ -962,7 +1135,7 @@ export default function RoadmapBuilder() {
                 
                 {/* Validation Section */}
                 <div className="border-t border-gray-200 pt-4 mt-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Validation (Optional - can select both)</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Learning Validation</h4>
                   
                   {/* Pre-Build Validation */}
                   <div className="mb-4">
@@ -1349,20 +1522,279 @@ export default function RoadmapBuilder() {
                 Last updated: {roadmap.metadata.lastUpdated}
               </div>
               
+              {/* Filters */}
+              <div className="mb-6">
+                {!showFilters ? (
+                  <button
+                    onClick={() => setShowFilters(true)}
+                    className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-left flex items-center justify-between transition-colors"
+                  >
+                    <span className="font-medium text-gray-700">Add Filters</span>
+                    <span className="text-gray-500">+</span>
+                  </button>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={clearAllFilters}
+                          className="text-sm text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Clear All
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowFilters(false);
+                            setSelectedFilterType(null);
+                          }}
+                          className="text-sm text-gray-600 hover:text-gray-800"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Active Filters Display */}
+                    {(priorityFilters.size < 2 || typeFilters.size < 3 || hasLearningValidation !== null || timelineFilters.size < 3) && (
+                      <div className="mb-4 pb-4 border-b border-gray-300">
+                        <p className="text-xs font-medium text-gray-600 mb-2">Active Filters:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {priorityFilters.size < 2 && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                              Priority: {Array.from(priorityFilters).map(p => p === 'must-have' ? 'Must Have' : 'Nice to Have').join(', ')}
+                            </span>
+                          )}
+                          {typeFilters.size < 3 && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                              Type: {Array.from(typeFilters).map(t => t === 'tooling' ? 'Tooling' : t === 'infrastructure' ? 'Infrastructure' : 'User-Facing').join(', ')}
+                            </span>
+                          )}
+                          {hasLearningValidation !== null && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                              Learning Validation: {hasLearningValidation ? 'Has Validation' : 'No Validation'}
+                            </span>
+                          )}
+                          {timelineFilters.size < 3 && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                              Timeline: {Array.from(timelineFilters).map(t => t.toUpperCase()).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Filter Type Selection */}
+                    {!selectedFilterType ? (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-3">Select a filter type:</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <button
+                            onClick={() => setSelectedFilterType('priority')}
+                            className="px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                          >
+                            <div className="font-medium text-gray-900">Priority</div>
+                            <div className="text-xs text-gray-500 mt-1">Must Have, Nice to Have</div>
+                          </button>
+                          <button
+                            onClick={() => setSelectedFilterType('type')}
+                            className="px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                          >
+                            <div className="font-medium text-gray-900">Type</div>
+                            <div className="text-xs text-gray-500 mt-1">Tooling, User-Facing, Infrastructure</div>
+                          </button>
+                          <button
+                            onClick={() => setSelectedFilterType('learning-validation')}
+                            className="px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                          >
+                            <div className="font-medium text-gray-900">Learning Validation</div>
+                            <div className="text-xs text-gray-500 mt-1">Has validation methods</div>
+                          </button>
+                          <button
+                            onClick={() => setSelectedFilterType('timeline')}
+                            className="px-4 py-3 bg-white border border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                          >
+                            <div className="font-medium text-gray-900">Timeline</div>
+                            <div className="text-xs text-gray-500 mt-1">NOW, NEXT, LATER</div>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedFilterType(null)}
+                              className="text-gray-500 hover:text-gray-700"
+                            >
+                              ← Back
+                            </button>
+                            <h4 className="font-medium text-gray-900">
+                              {selectedFilterType === 'priority' && 'Priority Filter'}
+                              {selectedFilterType === 'type' && 'Type Filter'}
+                              {selectedFilterType === 'learning-validation' && 'Learning Validation Filter'}
+                              {selectedFilterType === 'timeline' && 'Timeline Filter'}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {/* Priority Filter Options */}
+                        {selectedFilterType === 'priority' && (
+                          <div className="bg-white p-4 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">Select priorities:</label>
+                            <div className="space-y-2">
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={priorityFilters.has('must-have')}
+                                  onChange={() => togglePriorityFilter('must-have')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">🔴 Must Have</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={priorityFilters.has('nice-to-have')}
+                                  onChange={() => togglePriorityFilter('nice-to-have')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">🟡 Nice to Have</span>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Type Filter Options */}
+                        {selectedFilterType === 'type' && (
+                          <div className="bg-white p-4 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">Select types:</label>
+                            <div className="space-y-2">
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={typeFilters.has('tooling')}
+                                  onChange={() => toggleTypeFilter('tooling')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">🔧 Tooling</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={typeFilters.has('user-facing')}
+                                  onChange={() => toggleTypeFilter('user-facing')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">👥 User-Facing Feature</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={typeFilters.has('infrastructure')}
+                                  onChange={() => toggleTypeFilter('infrastructure')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">⚙️ Infrastructure</span>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Learning Validation Filter Options */}
+                        {selectedFilterType === 'learning-validation' && (
+                          <div className="bg-white p-4 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">Learning Validation:</label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={hasLearningValidation === true}
+                                onChange={(e) => {
+                                  setHasLearningValidation(e.target.checked ? true : null);
+                                  if (!e.target.checked) {
+                                    setSelectedFilterType(null);
+                                  }
+                                }}
+                                className="mr-2"
+                              />
+                              <span className="text-sm text-gray-700">Has Learning Validation</span>
+                            </label>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Shows only problems with pre-build or post-build validation methods
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Timeline Filter Options */}
+                        {selectedFilterType === 'timeline' && (
+                          <div className="bg-white p-4 rounded-lg border border-gray-200">
+                            <label className="block text-sm font-medium text-gray-700 mb-3">Select timelines:</label>
+                            <div className="space-y-2">
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={timelineFilters.has('now')}
+                                  onChange={() => toggleTimelineFilter('now')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">NOW</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={timelineFilters.has('next')}
+                                  onChange={() => toggleTimelineFilter('next')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">NEXT</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={timelineFilters.has('later')}
+                                  onChange={() => toggleTimelineFilter('later')}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm text-gray-700">LATER</span>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Done button */}
+                        <div className="mt-4">
+                          <button
+                            onClick={() => setSelectedFilterType(null)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
               {/* Timeline Sections - Horizontal Calendar View with Spanning Outcomes */}
               <div className="space-y-6">
                 {/* Column Headers */}
                 <div className="grid grid-cols-3 gap-4 mb-4">
-                  {(['now', 'next', 'later'] as TimelineSection[]).map(section => (
-                    <div key={section}>
-                      <h3 className="text-xl font-bold text-gray-900">
-                        {roadmap.timeline[section].label}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {roadmap.timeline[section].period}
-                      </p>
-                    </div>
-                  ))}
+                  {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
+                    if (!timelineFilters.has(section)) {
+                      return <div key={section}></div>; // Empty div to maintain grid layout
+                    }
+                    return (
+                      <div key={section}>
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {roadmap.timeline[section].label}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {roadmap.timeline[section].period}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Outcomes with Spanning Bars */}
@@ -1429,13 +1861,30 @@ export default function RoadmapBuilder() {
                       {outcome.isExpanded && (
                         <div className="grid grid-cols-3 gap-4">
                           {(['now', 'next', 'later'] as TimelineSection[]).map(section => {
+                            // Only show this section if it's in the timeline filters
+                            if (!timelineFilters.has(section)) {
+                              return (
+                                <div key={section} className="flex flex-col">
+                                  <div className="space-y-2">
+                                    <div className="text-xs text-gray-400 italic text-center p-4">
+                                      Filtered out
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
                             const sectionProblems = outcome.problems
                               .filter(p => p.timeline === section)
+                              .filter(matchesFilters) // Apply all filters
                               .sort((a, b) => {
-                                // Must-have comes before nice-to-have
+                                // First sort by priority (must-have before nice-to-have)
                                 if (a.priority === 'must-have' && b.priority === 'nice-to-have') return -1;
                                 if (a.priority === 'nice-to-have' && b.priority === 'must-have') return 1;
-                                return 0; // Keep original order for same priority
+                                // Then preserve the original array order (manual drag-and-drop order)
+                                const aIndex = outcome.problems.findIndex(p => p.id === a.id);
+                                const bIndex = outcome.problems.findIndex(p => p.id === b.id);
+                                return aIndex - bIndex;
                               });
                             
                             return (
@@ -1463,8 +1912,23 @@ export default function RoadmapBuilder() {
                                     <>
                                       {sectionProblems.map(problem => {
                                         const isExpanded = expandedProblems.has(problem.id);
+                                        const isDragging = draggedProblemId === problem.id;
+                                        const isDragOver = dragOverProblemId === problem.id;
                                         return (
-                                          <div key={problem.id} className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors">
+                                          <div
+                                            key={problem.id}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, problem.id)}
+                                            onDragOver={(e) => handleDragOver(e, problem.id)}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={(e) => handleDrop(e, problem.id, outcome.id, section)}
+                                            onDragEnd={handleDragEnd}
+                                            className={`bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors cursor-move ${
+                                              isDragging ? 'opacity-50' : ''
+                                            } ${
+                                              isDragOver ? 'border-blue-500 border-2 bg-blue-50' : ''
+                                            }`}
+                                          >
                                             <div className="flex items-start gap-2">
                                               <span className="text-lg">{problem.icon}</span>
                                               <div className="flex-1 min-w-0">
