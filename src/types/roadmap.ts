@@ -54,6 +54,7 @@ export interface Problem {
   priority: Priority;
   validation: Validation;
   engineeringReview?: EngineeringReview;
+  displayOrder?: number; // Manual drag-and-drop order within timeline section
   // Internal roadmap fields (added later by dev lead):
   scope?: Scope;
   detailedTimeline?: {

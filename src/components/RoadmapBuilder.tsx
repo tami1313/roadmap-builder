@@ -78,8 +78,41 @@ export default function RoadmapBuilder() {
   useEffect(() => {
     const loaded = loadRoadmap();
     if (loaded) {
-      setRoadmap(loaded);
-      if (loaded.outcomes.length > 0) {
+      // Migrate: Initialize displayOrder for existing problems that don't have it
+      const migrated = {
+        ...loaded,
+        outcomes: loaded.outcomes.map(outcome => {
+          // Group problems by timeline section and initialize displayOrder
+          const problemsBySection = new Map<TimelineSection, Problem[]>();
+          outcome.problems.forEach(problem => {
+            if (!problemsBySection.has(problem.timeline)) {
+              problemsBySection.set(problem.timeline, []);
+            }
+            problemsBySection.get(problem.timeline)!.push(problem);
+          });
+
+          // Initialize displayOrder for each section based on current array order
+          const migratedProblems = outcome.problems.map((problem, index) => {
+            if (problem.displayOrder === undefined) {
+              // Find the index within this timeline section
+              const sectionProblems = problemsBySection.get(problem.timeline) || [];
+              const sectionIndex = sectionProblems.findIndex(p => p.id === problem.id);
+              return {
+                ...problem,
+                displayOrder: sectionIndex >= 0 ? sectionIndex : index
+              };
+            }
+            return problem;
+          });
+
+          return {
+            ...outcome,
+            problems: migratedProblems
+          };
+        })
+      };
+      setRoadmap(migrated);
+      if (migrated.outcomes.length > 0) {
         setPhase('problems');
       }
     }
@@ -264,6 +297,11 @@ export default function RoadmapBuilder() {
             return; // Don't save yet
           }
 
+          // Set displayOrder when moving orphaned problem to outcome
+          const sectionProblems = targetOutcome.problems.filter(p => p.timeline === problemTimeline);
+          const maxDisplayOrder = sectionProblems.reduce((max, p) => 
+            Math.max(max, p.displayOrder !== undefined ? p.displayOrder : -1), -1);
+
           const updatedProblem: Problem = {
             ...orphanedProblem,
             title: problemTitle,
@@ -274,7 +312,8 @@ export default function RoadmapBuilder() {
             timeline: problemTimeline,
             priority: problemPriority,
             validation,
-            engineeringReview
+            engineeringReview,
+            displayOrder: maxDisplayOrder + 1
           };
 
           setRoadmap(prev => ({
@@ -331,6 +370,12 @@ export default function RoadmapBuilder() {
       }
     } else {
       // Add new problem
+      // Find the target outcome to determine displayOrder
+      const targetOutcome = roadmap.outcomes.find(o => o.id === currentOutcomeId);
+      const sectionProblems = targetOutcome?.problems.filter(p => p.timeline === problemTimeline) || [];
+      const maxDisplayOrder = sectionProblems.reduce((max, p) => 
+        Math.max(max, p.displayOrder !== undefined ? p.displayOrder : -1), -1);
+      
       const newProblem: Problem = {
         id: uuidv4(),
         title: problemTitle,
@@ -341,7 +386,8 @@ export default function RoadmapBuilder() {
         timeline: problemTimeline,
         priority: problemPriority,
         validation,
-        engineeringReview
+        engineeringReview,
+        displayOrder: maxDisplayOrder + 1 // Set displayOrder to be after existing problems
       };
 
       setRoadmap(prev => ({
@@ -599,10 +645,16 @@ export default function RoadmapBuilder() {
     const [draggedProblem] = reorderedSectionProblems.splice(draggedIndex, 1);
     reorderedSectionProblems.splice(targetIndex, 0, draggedProblem);
 
+    // Update displayOrder for all reordered problems in this section
+    const reorderedWithOrder = reorderedSectionProblems.map((problem, index) => ({
+      ...problem,
+      displayOrder: index
+    }));
+
     // Rebuild the full problems array:
     // 1. Find the first index where a section problem appears
     // 2. Keep all problems before that index
-    // 3. Insert all reordered section problems
+    // 3. Insert all reordered section problems with updated displayOrder
     // 4. Keep all problems after the last section problem
     const firstSectionIndex = outcome.problems.findIndex(p => p.timeline === timelineSection);
     const lastSectionIndex = outcome.problems.map((p, i) => ({ p, i }))
@@ -612,7 +664,7 @@ export default function RoadmapBuilder() {
 
     const allProblems = [
       ...outcome.problems.slice(0, firstSectionIndex), // Problems before section
-      ...reorderedSectionProblems, // Reordered section problems
+      ...reorderedWithOrder, // Reordered section problems with displayOrder
       ...outcome.problems.slice(lastSectionIndex + 1) // Problems after section
     ];
 
@@ -1896,10 +1948,11 @@ export default function RoadmapBuilder() {
                                 // First sort by priority (must-have before nice-to-have)
                                 if (a.priority === 'must-have' && b.priority === 'nice-to-have') return -1;
                                 if (a.priority === 'nice-to-have' && b.priority === 'must-have') return 1;
-                                // Then preserve the original array order (manual drag-and-drop order)
-                                const aIndex = outcome.problems.findIndex(p => p.id === a.id);
-                                const bIndex = outcome.problems.findIndex(p => p.id === b.id);
-                                return aIndex - bIndex;
+                                // Then sort by displayOrder (manual drag-and-drop order)
+                                // If displayOrder is not set, use the original array index as fallback
+                                const aOrder = a.displayOrder !== undefined ? a.displayOrder : outcome.problems.findIndex(p => p.id === a.id);
+                                const bOrder = b.displayOrder !== undefined ? b.displayOrder : outcome.problems.findIndex(p => p.id === b.id);
+                                return aOrder - bOrder;
                               });
                             
                             return (
