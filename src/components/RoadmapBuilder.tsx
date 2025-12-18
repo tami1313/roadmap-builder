@@ -1832,14 +1832,12 @@ export default function RoadmapBuilder() {
                               );
                             }
 
-                            // Get problems for this section, preserving manual order only
-                            // No auto-sorting - only use displayOrder from drag-and-drop
+                            // Get problems for this section
                             const sectionProblems = outcome.problems
                               .filter(p => p.timeline === section)
                               .filter(matchesFilters) // Apply all filters
                               .sort((a, b) => {
-                                // Only sort by displayOrder (manual drag-and-drop order)
-                                // displayOrder should always be set, but use 0 as fallback
+                                // Sort by displayOrder if available, otherwise maintain array order
                                 const aOrder = a.displayOrder ?? 0;
                                 const bOrder = b.displayOrder ?? 0;
                                 return aOrder - bOrder;
