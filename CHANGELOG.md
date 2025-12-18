@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2025-01-XX
+
+### Features & Enhancements
+
+#### Features
+- **Drag-and-Drop Reordering**
+  - Added drag-and-drop functionality to reorder problem cards within each expected outcome's timeline section
+  - Visual feedback during dragging (opacity change, drop zone highlighting)
+  - Manual priority ranking by dragging problems into preferred order
+  - Order persists across sessions via localStorage
+
+- **Enhanced Filter UI**
+  - Collapsible filter panel with "Add Filters" button
+  - Two-step filter selection: first choose filter type, then select options
+  - Active filters displayed as badges above filter options
+  - Four filter types: Priority, Type, Learning Validation, Timeline
+  - "Clear All" button to reset all filters
+  - Clean, organized card-based interface
+
+- **Success Notifications**
+  - Green success pop-up appears when adding new expected outcomes
+  - Green success pop-up appears when adding new problems to solve
+  - Auto-dismisses after 1 second
+  - Fixed position in top-right corner with fade-in animation
+
+- **Learning Validation Updates**
+  - Renamed "Validation" section to "Learning Validation" on Problems to Solve page
+  - Removed "(Optional - can select both)" text for cleaner UI
+  - Updated filter label to "Learning Validation"
+
+#### Improvements
+- Better user experience with visual feedback for actions
+- More intuitive filter interface with progressive disclosure
+- Cleaner form labels and section headers
+
 ## [1.5.0] - 2025-01-XX
 
 ### Security & Error Handling

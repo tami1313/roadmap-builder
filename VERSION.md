@@ -1,6 +1,12 @@
 # Version Information
 
-## Current Version: 1.5.0
+## Current Version: 1.6.0
+
+This version includes drag-and-drop reordering, enhanced filter UI, success notifications, and learning validation updates.
+
+### Previous Versions
+
+## Version 1.5.0
 
 This version includes password-protected editor portal and error boundary component.
 
