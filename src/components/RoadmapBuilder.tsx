@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Roadmap, Outcome, Problem, TimelineSection, Validation, EngineeringReview } from '@/types/roadmap';
 import { defaultRoadmap, getIconForType } from '@/lib/roadmapSchema';
-import { saveRoadmap, loadRoadmap } from '@/lib/storage';
+import { saveRoadmap, loadRoadmap, exportRoadmap, importRoadmap } from '@/lib/storage';
 import { v4 as uuidv4 } from 'uuid';
 
 type BuildPhase = 'outcomes' | 'problems' | 'complete';
@@ -75,7 +75,9 @@ export default function RoadmapBuilder() {
 
   useEffect(() => {
     const loaded = loadRoadmap();
+    console.warn('🔍 DEBUG: loadRoadmap returned:', loaded ? 'Data found' : 'No data');
     if (loaded) {
+      console.warn('🔍 DEBUG: Starting migration, outcomes count:', loaded.outcomes.length);
       // Migration: Reorder existing problems by type (user-facing > tooling > infrastructure)
       // This ensures retroactive ordering for existing data
       const getTypePriority = (type: string): number => {
@@ -1929,30 +1931,31 @@ export default function RoadmapBuilder() {
                               );
                             }
 
-                            // Get problems for this section
-                            const sectionProblems = outcome.problems
-                              .filter(p => p.timeline === section)
-                              .filter(matchesFilters) // Apply all filters
-                              .sort((a, b) => {
-                                // First sort by type: user-facing > tooling > infrastructure
-                                const getTypePriority = (type: string): number => {
-                                  if (type === 'user-facing') return 1;
-                                  if (type === 'tooling') return 2;
-                                  if (type === 'infrastructure') return 3;
-                                  return 4; // fallback
-                                };
-                                const aTypePriority = getTypePriority(a.type);
-                                const bTypePriority = getTypePriority(b.type);
-                                
-                                if (aTypePriority !== bTypePriority) {
-                                  return aTypePriority - bTypePriority;
-                                }
-                                
-                                // If same type, sort by displayOrder if available, otherwise maintain array order
-                                const aOrder = a.displayOrder ?? 0;
-                                const bOrder = b.displayOrder ?? 0;
-                                return aOrder - bOrder;
-                              });
+                            // Get problems for this section and sort by type
+                            const allSectionProblems = outcome.problems.filter(p => p.timeline === section);
+                            const filteredProblems = allSectionProblems.filter(matchesFilters);
+                            
+                            // Sort by type: user-facing > tooling > infrastructure
+                            const getTypePriority = (type: string): number => {
+                              if (type === 'user-facing') return 1;
+                              if (type === 'tooling') return 2;
+                              if (type === 'infrastructure') return 3;
+                              return 4; // fallback
+                            };
+                            
+                            const sectionProblems = filteredProblems.sort((a, b) => {
+                              const aTypePriority = getTypePriority(a.type);
+                              const bTypePriority = getTypePriority(b.type);
+                              
+                              if (aTypePriority !== bTypePriority) {
+                                return aTypePriority - bTypePriority;
+                              }
+                              
+                              // If same type, sort by displayOrder if available
+                              const aOrder = a.displayOrder ?? 0;
+                              const bOrder = b.displayOrder ?? 0;
+                              return aOrder - bOrder;
+                            });
                             
                             return (
                               <div key={section} className="flex flex-col">
