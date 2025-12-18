@@ -5,165 +5,8 @@ import { Roadmap, Outcome, Problem, TimelineSection, Validation, EngineeringRevi
 import { defaultRoadmap, getIconForType } from '@/lib/roadmapSchema';
 import { saveRoadmap, loadRoadmap } from '@/lib/storage';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 type BuildPhase = 'outcomes' | 'problems' | 'complete';
-
-// Sortable Problem Component
-function SortableProblem({
-  problem,
-  outcome,
-  section,
-  isExpanded,
-  onToggleExpanded,
-  onEdit,
-  onDelete,
-}: {
-  problem: Problem;
-  outcome: Outcome;
-  section: TimelineSection;
-  isExpanded: boolean;
-  onToggleExpanded: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: problem.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors cursor-move"
-    >
-      <div className="flex items-start gap-2">
-        <span className="text-lg">{problem.icon}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <h4 className="font-semibold text-sm text-gray-900 truncate">{problem.title}</h4>
-              {problem.engineeringReview?.reviewed && (
-                <span className="text-green-600 text-xs" title="Engineering reviewed">✓</span>
-              )}
-              {problem.engineeringReview?.certainty && (
-                <span className="text-xs text-gray-500">({problem.engineeringReview.certainty})</span>
-              )}
-              <button
-                onClick={onToggleExpanded}
-                className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
-                title={isExpanded ? "Collapse details" : "Expand details"}
-              >
-                <span>{isExpanded ? '▼' : '▶'}</span>
-                <span className="text-xs">{isExpanded ? 'Less' : 'More'}</span>
-              </button>
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={onEdit}
-                className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
-                title="Edit problem to solve"
-              >
-                Edit
-              </button>
-              <button
-                onClick={onDelete}
-                className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-opacity flex-shrink-0"
-                title="Delete problem to solve"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          {isExpanded && (
-            <div className="mt-2 space-y-2">
-              <p className="text-xs text-gray-700">{problem.description}</p>
-              <div className="text-xs text-gray-600">
-                <strong>Success:</strong> {problem.successCriteria}
-              </div>
-              <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
-                <div><strong>Type:</strong> {
-                  problem.type === 'tooling' ? '🔧 Tooling' : 
-                  problem.type === 'infrastructure' ? '⚙️ Infrastructure' : 
-                  '👥 User-Facing'
-                }</div>
-                <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
-                <div>
-                  <strong>Validation:</strong>
-                  {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
-                    <div className="ml-2">
-                      <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
-                        m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
-                      ).join(', ')}
-                    </div>
-                  )}
-                  {problem.validation.postBuild && problem.validation.postBuild.methods.length > 0 && (
-                    <div className="ml-2">
-                      <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
-                        m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
-                      ).join(', ')}
-                    </div>
-                  )}
-                </div>
-                {problem.engineeringReview && (
-                  <div className="mt-2 pt-2 border-t border-gray-300">
-                    <div><strong>Engineering Review:</strong> {problem.engineeringReview.reviewed ? '✓ Reviewed' : 'Not reviewed'}</div>
-                    {problem.engineeringReview.certainty && (
-                      <div><strong>Certainty:</strong> {problem.engineeringReview.certainty}</div>
-                    )}
-                    {problem.engineeringReview.riskLevel && (
-                      <div><strong>Risk:</strong> {problem.engineeringReview.riskLevel.charAt(0).toUpperCase() + problem.engineeringReview.riskLevel.slice(1)}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" className="text-gray-400">
-            <circle cx="2" cy="2" r="1.5" />
-            <circle cx="6" cy="2" r="1.5" />
-            <circle cx="10" cy="2" r="1.5" />
-            <circle cx="2" cy="6" r="1.5" />
-            <circle cx="6" cy="6" r="1.5" />
-            <circle cx="10" cy="6" r="1.5" />
-            <circle cx="2" cy="10" r="1.5" />
-            <circle cx="6" cy="10" r="1.5" />
-            <circle cx="10" cy="10" r="1.5" />
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function RoadmapBuilder() {
   const [roadmap, setRoadmap] = useState<Roadmap>(defaultRoadmap);
@@ -192,14 +35,6 @@ export default function RoadmapBuilder() {
     outcomeTimelines: TimelineSection[];
   } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  
-  // DnD Kit sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
   const [selectedFilterType, setSelectedFilterType] = useState<'priority' | 'type' | 'learning-validation' | 'timeline' | null>(null);
@@ -750,76 +585,6 @@ export default function RoadmapBuilder() {
     });
   };
 
-  // Handle drag end with @dnd-kit - Simplified approach
-  const handleDragEnd = (event: DragEndEvent, outcomeId: string, timelineSection: TimelineSection) => {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) {
-      return;
-    }
-
-    setRoadmap(prev => {
-      const outcome = prev.outcomes.find(o => o.id === outcomeId);
-      if (!outcome) {
-        return prev;
-      }
-
-      // Get all problems for this timeline section, sorted by current displayOrder
-      const sectionProblems = outcome.problems
-        .filter(p => p.timeline === timelineSection)
-        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
-      
-      const oldIndex = sectionProblems.findIndex(p => p.id === active.id);
-      const newIndex = sectionProblems.findIndex(p => p.id === over.id);
-
-      if (oldIndex === -1 || newIndex === -1) {
-        return prev;
-      }
-
-      // Reorder using arrayMove from @dnd-kit
-      const reorderedSectionProblems = arrayMove(sectionProblems, oldIndex, newIndex);
-
-      // Create a map of new displayOrder values by problem ID
-      const newDisplayOrders = new Map<string, number>();
-      reorderedSectionProblems.forEach((problem, index) => {
-        newDisplayOrders.set(problem.id, index);
-      });
-
-      // Update problems in place - just update displayOrder for section problems
-      const updatedProblems = outcome.problems.map(problem => {
-        if (problem.timeline === timelineSection && newDisplayOrders.has(problem.id)) {
-          const newOrder = newDisplayOrders.get(problem.id)!;
-          console.log(`Updating ${problem.id} displayOrder from ${problem.displayOrder} to ${newOrder}`);
-          return {
-            ...problem,
-            displayOrder: newOrder
-          };
-        }
-        return problem;
-      });
-
-      const updated = {
-        ...prev,
-        outcomes: prev.outcomes.map(o =>
-          o.id === outcomeId
-            ? { ...o, problems: updatedProblems }
-            : o
-        ),
-        metadata: {
-          ...prev.metadata,
-          lastUpdated: new Date().toISOString().split('T')[0]
-        }
-      };
-      
-      console.log('Updated roadmap:', updated.outcomes.find(o => o.id === outcomeId)?.problems
-        .filter(p => p.timeline === timelineSection)
-        .map(p => ({ id: p.id, title: p.title, displayOrder: p.displayOrder })));
-      
-      // Save to localStorage immediately
-      saveRoadmap(updated);
-      return updated;
-    });
-  };
 
   // Filter helper function
   const matchesFilters = (problem: Problem): boolean => {
@@ -2103,32 +1868,100 @@ export default function RoadmapBuilder() {
                                     )
                                   ) : (
                                     <>
-                                      <DndContext
-                                        sensors={sensors}
-                                        collisionDetection={closestCenter}
-                                        onDragEnd={(e) => handleDragEnd(e, outcome.id, section)}
-                                      >
-                                        <SortableContext
-                                          items={sectionProblems.map(p => p.id)}
-                                          strategy={verticalListSortingStrategy}
-                                        >
-                                          {sectionProblems.map(problem => {
-                                            const isExpanded = expandedProblems.has(problem.id);
-                                            return (
-                                              <SortableProblem
-                                                key={problem.id}
-                                                problem={problem}
-                                                outcome={outcome}
-                                                section={section}
-                                                isExpanded={isExpanded}
-                                                onToggleExpanded={() => toggleProblemExpanded(problem.id)}
-                                                onEdit={() => handleEditProblem(outcome.id, problem.id)}
-                                                onDelete={() => handleDeleteProblem(outcome.id, problem.id)}
-                                              />
-                                            );
-                                          })}
-                                        </SortableContext>
-                                      </DndContext>
+                                      {sectionProblems.map(problem => {
+                                        const isExpanded = expandedProblems.has(problem.id);
+                                        return (
+                                          <div
+                                            key={problem.id}
+                                            className="bg-gray-50 rounded p-3 border border-gray-200 group hover:border-blue-300 transition-colors"
+                                          >
+                                            <div className="flex items-start gap-2">
+                                              <span className="text-lg">{problem.icon}</span>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                  <div className="flex items-center gap-2 flex-1">
+                                                    <h4 className="font-semibold text-gray-900 text-sm">{problem.title}</h4>
+                                                    {problem.engineeringReview?.reviewed && (
+                                                      <span className="text-green-600" title="Engineering reviewed">✓</span>
+                                                    )}
+                                                    {problem.engineeringReview?.certainty && (
+                                                      <span className="text-xs text-gray-500">({problem.engineeringReview.certainty})</span>
+                                                    )}
+                                                    <button
+                                                      onClick={() => toggleProblemExpanded(problem.id)}
+                                                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                                                      title={isExpanded ? "Collapse details" : "Expand details"}
+                                                    >
+                                                      <span>{isExpanded ? '▼' : '▶'}</span>
+                                                      <span className="text-xs">{isExpanded ? 'Less' : 'More'}</span>
+                                                    </button>
+                                                  </div>
+                                                  <div className="flex gap-1">
+                                                    <button
+                                                      onClick={() => handleEditProblem(outcome.id, problem.id)}
+                                                      className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-opacity flex-shrink-0"
+                                                      title="Edit problem to solve"
+                                                    >
+                                                      Edit
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleDeleteProblem(outcome.id, problem.id)}
+                                                      className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-opacity flex-shrink-0"
+                                                      title="Delete problem to solve"
+                                                    >
+                                                      Delete
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                                {isExpanded && (
+                                                  <div className="mt-2 space-y-2">
+                                                    <p className="text-xs text-gray-700">{problem.description}</p>
+                                                    <div className="text-xs text-gray-600">
+                                                      <strong>Success:</strong> {problem.successCriteria}
+                                                    </div>
+                                                    <div className="text-xs text-gray-600 space-y-1 pt-2 border-t border-gray-300">
+                                                      <div><strong>Type:</strong> {
+                                                        problem.type === 'tooling' ? '🔧 Tooling' : 
+                                                        problem.type === 'infrastructure' ? '⚙️ Infrastructure' : 
+                                                        '👥 User-Facing'
+                                                      }</div>
+                                                      <div><strong>Priority:</strong> {problem.priority === 'must-have' ? '🔴 Must Have' : '🟡 Nice to Have'}</div>
+                                                      <div>
+                                                        <strong>Validation:</strong>
+                                                        {problem.validation.preBuild && problem.validation.preBuild.methods.length > 0 && (
+                                                          <div className="ml-2">
+                                                            <strong>Pre-Build:</strong> {problem.validation.preBuild.methods.map(m => 
+                                                              m === 'user-testing' ? 'User Testing' : 'Internal Experimentation'
+                                                            ).join(', ')}
+                                                          </div>
+                                                        )}
+                                                        {problem.validation.postBuild && problem.validation.postBuild.methods && problem.validation.postBuild.methods.length > 0 && (
+                                                          <div className="ml-2">
+                                                            <strong>Post-Build:</strong> {problem.validation.postBuild.methods.map(m => 
+                                                              m === 'user-validation' ? 'User Validation' : 'SME Evaluation'
+                                                            ).join(', ')}
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                      {problem.engineeringReview && (
+                                                        <div className="mt-2 pt-2 border-t border-gray-300">
+                                                          <div><strong>Engineering Review:</strong> {problem.engineeringReview.reviewed ? '✓ Reviewed' : 'Not reviewed'}</div>
+                                                          {problem.engineeringReview.certainty && (
+                                                            <div><strong>Certainty:</strong> {problem.engineeringReview.certainty}</div>
+                                                          )}
+                                                          {problem.engineeringReview.riskLevel && (
+                                                            <div><strong>Risk:</strong> {problem.engineeringReview.riskLevel.charAt(0).toUpperCase() + problem.engineeringReview.riskLevel.slice(1)}</div>
+                                                          )}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                       {sections.includes(section) && (
                                         <button
                                           onClick={() => {
