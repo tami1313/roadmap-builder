@@ -1419,12 +1419,41 @@ export default function RoadmapBuilder() {
               <p className="text-gray-600">No expected outcomes added yet. Add an expected outcome first.</p>
             ) : (
               <div className="space-y-4">
-                {roadmap.outcomes.map(outcome => (
+                {roadmap.outcomes
+                  .sort((a, b) => {
+                    // Sort by start timeline: now > next > later
+                    const getStartPriority = (outcome: typeof a): number => {
+                      if (outcome.timeline.sections.includes('now')) return 1;
+                      if (outcome.timeline.sections.includes('next')) return 2;
+                      return 3; // only later
+                    };
+                    return getStartPriority(a) - getStartPriority(b);
+                  })
+                  .map(outcome => (
                   outcome.problems.length > 0 && (
                     <div key={outcome.id} className="border border-gray-200 rounded-lg p-4">
                       <h4 className="font-semibold text-gray-900 mb-3">{outcome.title}</h4>
                       <div className="space-y-2">
-                        {outcome.problems.map(problem => (
+                        {outcome.problems
+                          .sort((a, b) => {
+                            // Sort by type: user-facing > tooling > infrastructure
+                            const getTypePriority = (type: string): number => {
+                              if (type === 'user-facing') return 1;
+                              if (type === 'tooling') return 2;
+                              if (type === 'infrastructure') return 3;
+                              return 4;
+                            };
+                            const aTypePriority = getTypePriority(a.type);
+                            const bTypePriority = getTypePriority(b.type);
+                            
+                            if (aTypePriority !== bTypePriority) {
+                              return aTypePriority - bTypePriority;
+                            }
+                            
+                            // If same type, maintain array order
+                            return 0;
+                          })
+                          .map(problem => (
                           <div key={problem.id} className="p-3 bg-gray-50 rounded border border-gray-200 hover:border-blue-300 transition-colors">
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -1837,7 +1866,21 @@ export default function RoadmapBuilder() {
                               .filter(p => p.timeline === section)
                               .filter(matchesFilters) // Apply all filters
                               .sort((a, b) => {
-                                // Sort by displayOrder if available, otherwise maintain array order
+                                // First sort by type: user-facing > tooling > infrastructure
+                                const getTypePriority = (type: string): number => {
+                                  if (type === 'user-facing') return 1;
+                                  if (type === 'tooling') return 2;
+                                  if (type === 'infrastructure') return 3;
+                                  return 4; // fallback
+                                };
+                                const aTypePriority = getTypePriority(a.type);
+                                const bTypePriority = getTypePriority(b.type);
+                                
+                                if (aTypePriority !== bTypePriority) {
+                                  return aTypePriority - bTypePriority;
+                                }
+                                
+                                // If same type, sort by displayOrder if available, otherwise maintain array order
                                 const aOrder = a.displayOrder ?? 0;
                                 const bOrder = b.displayOrder ?? 0;
                                 return aOrder - bOrder;
@@ -2003,7 +2046,17 @@ export default function RoadmapBuilder() {
               <p className="text-gray-600">No expected outcomes added yet. Start by adding your first expected outcome above.</p>
             ) : (
               <div className="space-y-4">
-                {roadmap.outcomes.map(outcome => (
+                {roadmap.outcomes
+                  .sort((a, b) => {
+                    // Sort by start timeline: now > next > later
+                    const getStartPriority = (outcome: typeof a): number => {
+                      if (outcome.timeline.sections.includes('now')) return 1;
+                      if (outcome.timeline.sections.includes('next')) return 2;
+                      return 3; // only later
+                    };
+                    return getStartPriority(a) - getStartPriority(b);
+                  })
+                  .map(outcome => (
                   <div key={outcome.id} className="border border-gray-200 rounded-lg overflow-hidden">
                     {/* Expected Outcome Header */}
                     <div className="p-3 bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -2037,7 +2090,26 @@ export default function RoadmapBuilder() {
                         </button>
                         {expandedOutcomeProblems.has(outcome.id) && (
                           <div className="divide-y divide-gray-100">
-                            {outcome.problems.map(problem => (
+                            {outcome.problems
+                              .sort((a, b) => {
+                                // Sort by type: user-facing > tooling > infrastructure
+                                const getTypePriority = (type: string): number => {
+                                  if (type === 'user-facing') return 1;
+                                  if (type === 'tooling') return 2;
+                                  if (type === 'infrastructure') return 3;
+                                  return 4;
+                                };
+                                const aTypePriority = getTypePriority(a.type);
+                                const bTypePriority = getTypePriority(b.type);
+                                
+                                if (aTypePriority !== bTypePriority) {
+                                  return aTypePriority - bTypePriority;
+                                }
+                                
+                                // If same type, maintain array order
+                                return 0;
+                              })
+                              .map(problem => (
                               <div key={problem.id} className="p-3 hover:bg-gray-50 transition-colors">
                                 <div className="flex justify-between items-start">
                                   <div className="flex-1">
